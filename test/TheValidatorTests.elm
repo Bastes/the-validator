@@ -102,6 +102,45 @@ theValidatorTests =
                     isValid noneOfTheseFizzAndBuzzes n
                         |> Expect.equal False
             ]
+        , describe "map" <|
+            let
+                positive =
+                    Validator.simple
+                        (flip (>) 0)
+                        "needs to be positive"
+
+                notFactorOf3 =
+                    Validator.parameterized
+                        (\n -> (n % 3) /= 0)
+                        (\n -> toString n ++ " needs not be a factor of 3")
+
+                positiveAndNotFactorOf3 =
+                    Validator.all
+                        [ positive
+                        , notFactorOf3
+                        ]
+                        |> Validator.map (\error -> [ "the number", error ])
+            in
+            [ fuzz aFactorOf3 "it maps over all errors" <|
+                \n ->
+                    validate positiveAndNotFactorOf3 n
+                        |> Expect.equal
+                            [ [ "the number", "needs to be positive" ]
+                            , [ "the number", toString n ++ " needs not be a factor of 3" ]
+                            ]
+            , fuzz aNonFactorOf3 "it does not return errors when there are none" <|
+                \n ->
+                    validate positiveAndNotFactorOf3 n
+                        |> Expect.equal []
+            , fuzz aFactorOf3 "it rejects an invalid model" <|
+                \n ->
+                    isValid positiveAndNotFactorOf3 n
+                        |> Expect.equal False
+            , fuzz aNonFactorOf3 "it validates a valid model" <|
+                \n ->
+                    isValid positiveAndNotFactorOf3 n
+                        |> Expect.equal True
+            ]
         ]
 
 
@@ -127,5 +166,20 @@ aNonFizzBuzzInt =
         { retries = 10
         , fallback = always 7
         , condition = \n -> (n % 3 /= 0) && (n % 5 /= 0)
+        }
+        (intRange 1 1000)
+
+
+aFactorOf3 : Fuzzer Int
+aFactorOf3 =
+    intRange -1000 0 |> Fuzz.map ((*) 3)
+
+
+aNonFactorOf3 : Fuzzer Int
+aNonFactorOf3 =
+    conditional
+        { retries = 10
+        , fallback = always 7
+        , condition = \n -> (n % 3) /= 0
         }
         (intRange 1 1000)

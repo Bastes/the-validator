@@ -2,6 +2,7 @@ module TheValidator
     exposing
         ( all
         , isValid
+        , map
         , parameterized
         , simple
         , validate
@@ -14,6 +15,8 @@ module TheValidator
 @docs simple, parameterized
 
 @docs all
+
+@docs map
 
 -}
 
@@ -76,6 +79,18 @@ parameterized isValid error =
 all : List (Validator error model) -> Validator error model
 all validators =
     Composite <| flattenAll validators
+
+
+{-| map
+-}
+map : (errorA -> errorB) -> Validator errorA model -> Validator errorB model
+map transformation validator =
+    case validator of
+        Simple error isValid ->
+            parameterized isValid (error >> transformation)
+
+        Composite validators ->
+            Composite <| List.map (map transformation) validators
 
 
 
