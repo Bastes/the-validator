@@ -63,6 +63,7 @@ type Validator error model
 the reasons why the model is invalid, consider using `validate` instead.
 
     bigNumber = simple (flip (>) 1000) "Not such a big number"
+
     isValid bigNumber 1001 == True
     isValid bigNumber 1000 == False
 
@@ -87,6 +88,7 @@ will be empty when the model is valid. If you only care about the validity of
 the model, consider using the more efficient `isValid` instead.
 
     atLeast8Chars = simple (\s -> String.length s >= 8) "should be at least 8 chars long"
+
     validate atLeast8Chars "2short" == ["should be at least 8 chars long"]
     validate atLeast8Chars "long enough" == []
 
@@ -163,17 +165,20 @@ an record, more than one check on a value, etc.).
     moreThan2 = simple (flip (>) 2) "must be greater than 2"
     notFactorOf3 = simple (\n -> n % 3 /= 0) "must not be a factor of 3"
     lessThan1000 = simple (flip (<) 1000) "must be lower than 1000"
+
     allThose =
       all
       [ moreThan2
       , notFactorOf3
       , lessThan1000
       ]
+
     validate allThose 1 == ["must be greater than 2"]
     validate allThose 333 == ["must not be a factor of 3"]
     validate allThose 1000 == ["must be lower than 1000"]
     validate allThose 12345 == ["must not be a factor of 3", "must be lower than 1000"]
     validate allThose 124 == []
+
     isValid allThose 778 == True
     isValid allTHose 12 == False
 
@@ -188,6 +193,7 @@ function handles the transformation from one error type to the other.
 
     onlyTrue = simple ((==) True) "This is simply not True!"
     onlyMoreTrue = onlyTrue |> map (\error -> ["No!", error, "It is False!"])
+
     validate onlyTrue False == ["This is simply not True!"]
     validate onlyMoreTrue False == ["No!", "This is simply not True!", "It is False!"]
 
@@ -211,8 +217,10 @@ the original validator and feeds it instead. Useful to focus on a field of a
 record, part of a list, etc.
 
     type alias Fighter = { name: String, strength : Int }
+
     under9000 = simple (flip (<=) 9000) "It's over 9000!!!"
     onlyHuman = focus .strength under9000
+
     validate onlyHuman { name = "Satan", strength = 9 } == []
     validate onlyHuman { name = "Goku", strength = 999999 } == [ "It's over 9000!!!" ]
 
@@ -258,7 +266,21 @@ focusMap modelTransformation errorTransformation =
 The transformation function receives the index of the element under scrutiny as
 well as the error obtained by the internal validator.
 
-    TODO
+    model Cup = {owner: String, temperature: Int}
+    cups =
+      [ {owner: "Mama Bear", temperature: 100}
+      , {owner: "Papa Bear", temperature: 20}
+      , {owner: "Little Bear", temperature: 30}
+      ]
+
+    tooHot = simple (\cup -> cup.temperature > 30) "it's too hot!"
+    tooCold = simple (\cup -> cup.temperature < 30) "it's too cold!"
+
+    justRight = all [tooHot, tooCold]
+
+    goldilocks = list (\index error -> (index, error)) justRight
+
+    validate goldilocks cups == [(1, "it's too hot!"), (2, "it's too cold!")]
 
 -}
 list : (Int -> errorA -> errorB) -> Validator errorA model -> Validator errorB (List model)
