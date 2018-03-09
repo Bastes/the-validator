@@ -3,10 +3,12 @@ module TheValidator
         ( all
         , focus
         , focusMap
+        , invalid
         , isValid
         , map
         , parameterized
         , simple
+        , valid
         , validate
         )
 
@@ -14,7 +16,7 @@ module TheValidator
 
 @docs validate, isValid
 
-@docs simple, parameterized
+@docs simple, parameterized, invalid, valid
 
 @docs all
 
@@ -30,6 +32,7 @@ type alias Validation model =
 type Validator error model
     = Simple (model -> error) (Validation model)
     | Composite (List (Validator error model))
+    | Valid
 
 
 {-| isValid
@@ -44,6 +47,9 @@ isValid validator model =
             validators
                 |> List.map isValid
                 |> List.all ((|>) model)
+
+        Valid ->
+            True
 
 
 {-| validate
@@ -61,6 +67,9 @@ validate validator model =
             validators
                 |> List.concatMap (flip validate model)
 
+        Valid ->
+            []
+
 
 {-| simple
 -}
@@ -74,6 +83,20 @@ simple isValid error =
 parameterized : Validation model -> (model -> error) -> Validator error model
 parameterized isValid error =
     Simple error isValid
+
+
+{-| invalid
+-}
+invalid : error -> Validator error model
+invalid =
+    simple (always False)
+
+
+{-| valid
+-}
+valid : Validator error model
+valid =
+    Valid
 
 
 {-| all
@@ -94,6 +117,9 @@ map transformation validator =
         Composite validators ->
             Composite <| List.map (map transformation) validators
 
+        Valid ->
+            Valid
+
 
 {-| focus
 -}
@@ -107,6 +133,9 @@ focus transformation validator =
 
         Composite validators ->
             Composite <| List.map (focus transformation) validators
+
+        Valid ->
+            Valid
 
 
 {-| focusMap
@@ -125,6 +154,9 @@ flatten validator =
     case validator of
         Composite validators ->
             flattenAll validators
+
+        Valid ->
+            []
 
         _ ->
             [ validator ]

@@ -57,6 +57,26 @@ theValidatorTests =
                     isValid aValidator n
                         |> Expect.equal False
             ]
+        , describe "invalid" <|
+            [ fuzz int "it always reports a failure, no matter what the input" <|
+                \n ->
+                    validate (Validator.invalid "this is always invalid") n
+                        |> Expect.equal [ "this is always invalid" ]
+            , fuzz int "it is never valid, no matter what the input" <|
+                \n ->
+                    isValid (Validator.invalid "this is always invalid") n
+                        |> Expect.equal False
+            ]
+        , describe "valid" <|
+            [ fuzz int "it never reports a failure, no matter what the input" <|
+                \n ->
+                    validate Validator.valid n
+                        |> Expect.equal []
+            , fuzz int "it is always valid, no matter what the input" <|
+                \n ->
+                    isValid Validator.valid n
+                        |> Expect.equal True
+            ]
         , describe "all" <|
             let
                 notFizz =
