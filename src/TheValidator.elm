@@ -13,15 +13,23 @@ module TheValidator
         , validate
         )
 
-{-| TODO
+{-| This library provides a way to express validations through Validator objects
+holding the validation logic and allowing for composition.
+
+
+# Validation
 
 @docs validate, isValid
 
+
+# Validator builders
+
 @docs simple, parameterized, invalid, valid
 
-@docs all
 
-@docs map, focus, focusMap, list
+# Validator composition
+
+@docs all, map, focus, focusMap, list
 
 -}
 
@@ -36,7 +44,13 @@ type Validator error model
     | Valid
 
 
-{-| isValid
+{-| Checks wether a model is valid according to a validator. If you care about
+the reasons why the model is invalid, consider using `validate` instead.
+
+    bigNumber = simple (flip (>) 1000) "Not such a big number"
+    isValid bigNumber 1001 == True
+    isValid bigNumber 1000 == False
+
 -}
 isValid : Validator error model -> model -> Bool
 isValid validator model =
@@ -53,7 +67,14 @@ isValid validator model =
             True
 
 
-{-| validate
+{-| Validate a model using a validator, returning a list of errors. The list
+will be empty when the model is valid. If you only care about the validity of
+the model, consider using the more efficient `isValid` instead.
+
+    atLeast8Chars = simple (\s -> String.length s >= 8) "should be at least 8 chars long"
+    validate atLeast8Chars "2short" == ["should be at least 8 chars long"]
+    validate atLeast8Chars "long enough" == []
+
 -}
 validate : Validator error model -> model -> List error
 validate validator model =
@@ -72,42 +93,89 @@ validate validator model =
             []
 
 
-{-| simple
+{-| A simple validator that returns an error constant.
+
+    stayPositive = (simple (flip (>) 0) "only positive numbers are allowed here stranger")
+    validate stayPositive 0 == ["only positive numbers are allowed here stranger"]
+
 -}
 simple : Validation model -> error -> Validator error model
 simple isValid error =
     Simple (always [ error ]) isValid
 
 
-{-| parameterized
+{-| A parameterized validator that composes a single error from the model.
+
+    justMonika = parameterized ((==) "Monika") (\name -> "Not " ++ name ++ "! Just Monika.")
+    validate justMonika "Yuri" == ["Not Yuri! Just Monika."]
+
 -}
 parameterized : Validation model -> (model -> error) -> Validator error model
 parameterized isValid error =
     Simple (error >> flip (::) []) isValid
 
 
-{-| invalid
+{-| A validator that is always invalid. It will always provide the same error.
+
+    validate (invalid "Bad, bad number!") 111 == ["Bad, bad number!"]
+    isValid (invalid "Some error message") "blah" == True
+
 -}
 invalid : error -> Validator error model
 invalid =
     simple (always False)
 
 
-{-| valid
+{-| A validator that is always valid. It will always pass, never provide error.
+
+    validate valid 123 == []
+    isValid valid "something" == True
+
 -}
 valid : Validator error model
 valid =
     Valid
 
 
-{-| all
+
+-- COMPOSITION
+
+
+{-| Converts a list of validator into one new validator of the same type.
+This is useful to aggregate multiple validations on the same model (fields in
+an record, more than one check on a value, etc.).
+
+    moreThan2 = simple (flip (>) 2) "must be greater than 2"
+    notFactorOf3 = simple (\n -> n % 3 /= 0) "must not be a factor of 3"
+    lessThan1000 = simple (flip (<) 1000) "must be lower than 1000"
+    allThose =
+      all
+      [ moreThan2
+      , notFactorOf3
+      , lessThan1000
+      ]
+    validate allThose 1 == ["must be greater than 2"]
+    validate allThose 333 == ["must not be a factor of 3"]
+    validate allThose 1000 == ["must be lower than 1000"]
+    validate allThose 12345 == ["must not be a factor of 3", "must be lower than 1000"]
+    validate allThose 124 == []
+    isValid allThose 778 == True
+    isValid allTHose 12 == False
+
 -}
 all : List (Validator error model) -> Validator error model
 all validators =
     Composite <| flattenAll validators
 
 
-{-| map
+{-| Decorates a validator by modifying the errors it returns. The transformation
+function handles the transformation from one error type to the other.
+
+    onlyTrue = simple ((==) True) "This is simply not True!"
+    onlyMoreTrue = onlyTrue |> map (\error -> ["No!", error, "It is False!"])
+    validate onlyTrue False == ["This is simply not True!"]
+    validate onlyMoreTrue False == ["No!", "This is simply not True!", "It is False!"]
+
 -}
 map : (errorA -> errorB) -> Validator errorA model -> Validator errorB model
 map transformation validator =
@@ -122,7 +190,17 @@ map transformation validator =
             Valid
 
 
-{-| focus
+{-| Creates a new validator to check another model. The transformation function
+takes the model provided to the new validator, extracts the model expected by
+the original validator and feeds it instead. Useful to focus on a field of a
+record, part of a list, etc.
+
+    type alias Fighter = { name: String, strength : Int }
+    under9000 = simple (flip (<=) 9000) "It's over 9000!!!"
+    onlyHuman = focus .strength under9000
+    validate onlyHuman { name = "Satan", strength = 9 } == []
+    validate onlyHuman { name = "Goku", strength = 999999 } == [ "It's over 9000!!!" ]
+
 -}
 focus : (modelB -> modelA) -> Validator error modelA -> Validator error modelB
 focus transformation validator =
@@ -139,14 +217,34 @@ focus transformation validator =
             Valid
 
 
-{-| focusMap
+{-| Takes a validator and transform it to work on another model and change the
+errors. Shortcut for `focus` then `map`.
+
+    type alias User =
+        { login : String, password : String }
+
+    passwordValidator =
+        simple ((/=) "password") "'password' is not a very good password"
+
+    userValidator =
+        focusMap .password (\error -> "for realz " ++ error) passwordValidator
+
+    user = { name = "Carl Streator", password = "password" }
+
+    validate userValidator == ["for realz 'password' is not a very good password"]
+
 -}
 focusMap : (modelB -> modelA) -> (errorA -> errorB) -> Validator errorA modelA -> Validator errorB modelB
 focusMap modelTransformation errorTransformation =
     focus modelTransformation >> map errorTransformation
 
 
-{-| list
+{-| Makes a validator that applies another validator to a list of elements.
+The transformation function receives the index of the element under scrutiny as
+well as the error obtained by the internal validator.
+
+    TODO
+
 -}
 list : (Int -> errorA -> errorB) -> Validator errorA model -> Validator errorB (List model)
 list transformation validator =
