@@ -1,6 +1,7 @@
 module TheValidator
     exposing
         ( all
+        , focus
         , isValid
         , map
         , parameterized
@@ -16,7 +17,7 @@ module TheValidator
 
 @docs all
 
-@docs map
+@docs map, focus
 
 -}
 
@@ -91,6 +92,20 @@ map transformation validator =
 
         Composite validators ->
             Composite <| List.map (map transformation) validators
+
+
+{-| focus
+-}
+focus : (modelB -> modelA) -> Validator error modelA -> Validator error modelB
+focus transformation validator =
+    case validator of
+        Simple error isValid ->
+            parameterized
+                (transformation >> isValid)
+                (transformation >> error)
+
+        Composite validators ->
+            Composite <| List.map (focus transformation) validators
 
 
 

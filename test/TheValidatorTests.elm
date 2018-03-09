@@ -141,6 +141,44 @@ theValidatorTests =
                     isValid positiveAndNotFactorOf3 n
                         |> Expect.equal True
             ]
+        , describe "focus" <|
+            let
+                naughtyNicks =
+                    [ "bugger", "jay", "dunderhead", "fribble", "gadabout" ]
+
+                aNonNaughtyNick =
+                    conditional
+                        { retries = 10
+                        , fallback = always "gentleman"
+                        , condition = \n -> List.member n naughtyNicks
+                        }
+                        string
+
+                polite =
+                    Validator.parameterized
+                        (not << flip List.member naughtyNicks)
+                        (\name -> "please refrain from calling me a " ++ name)
+
+                politeGentleman =
+                    Validator.focus .name polite
+            in
+            [ fuzz (oneOfThese naughtyNicks) "it shows the errors on the detail" <|
+                \nick ->
+                    validate politeGentleman { name = nick }
+                        |> Expect.equal [ "please refrain from calling me a " ++ nick ]
+            , fuzz aNonNaughtyNick "it shows no error when there is none" <|
+                \nick ->
+                    validate politeGentleman { name = nick }
+                        |> Expect.equal []
+            , fuzz (oneOfThese naughtyNicks) "if fails when the model is invalid" <|
+                \nick ->
+                    isValid politeGentleman { name = nick }
+                        |> Expect.equal False
+            , fuzz aNonNaughtyNick "succeeds when the model is valid" <|
+                \nick ->
+                    isValid politeGentleman { name = nick }
+                        |> Expect.equal True
+            ]
         ]
 
 
