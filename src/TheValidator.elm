@@ -1,6 +1,8 @@
 module TheValidator
     exposing
-        ( all
+        ( Validation
+        , Validator
+        , all
         , focus
         , focusMap
         , invalid
@@ -17,27 +19,40 @@ module TheValidator
 holding the validation logic and allowing for composition.
 
 
+# Types
+
+@docs Validator
+
+@docs Validation
+
+
 # Validation
 
 @docs validate, isValid
 
 
-# Validator builders
+# Validator Constructors
 
 @docs simple, parameterized, invalid, valid
 
 
-# Validator composition
+# Validator Composition
 
 @docs all, map, focus, focusMap, list
 
 -}
 
 
+{-| A `Validation` is a function that validates a model.
+-}
 type alias Validation model =
     model -> Bool
 
 
+{-| A `Validator` holds validations and corresponding errors for a model.
+The internals of this data type are not exposed, instead see the constructors
+for more details.
+-}
 type Validator error model
     = Simple (model -> List error) (Validation model)
     | Composite (List (Validator error model))
