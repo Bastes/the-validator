@@ -1,8 +1,9 @@
 module TheValidator
     exposing
         ( all
-        , simple
         , isValid
+        , parameterized
+        , simple
         , validate
         )
 
@@ -10,9 +11,10 @@ module TheValidator
 
 @docs validate, isValid
 
-@docs simple
+@docs simple, parameterized
 
 @docs all
+
 -}
 
 
@@ -21,7 +23,7 @@ type alias Validation model =
 
 
 type Validator error model
-    = Simple error (Validation model)
+    = Simple (model -> error) (Validation model)
     | Composite (List (Validator error model))
 
 
@@ -48,17 +50,24 @@ validate validator model =
             if model |> isValid then
                 []
             else
-                [ error ]
+                [ error model ]
 
         Composite validators ->
             validators
                 |> List.concatMap (flip validate model)
 
 
-{-| validator
+{-| simple
 -}
 simple : Validation model -> error -> Validator error model
 simple isValid error =
+    Simple (always error) isValid
+
+
+{-| parameterized
+-}
+parameterized : Validation model -> (model -> error) -> Validator error model
+parameterized isValid error =
     Simple error isValid
 
 

@@ -12,7 +12,9 @@ theValidatorTests =
         [ describe "simple" <|
             let
                 aValidator =
-                    Validator.simple ((/=) "") "Hey, this string is blank! WTF dude?"
+                    Validator.simple
+                        ((/=) "")
+                        "Hey, this string is blank! WTF dude?"
             in
             [ test "reports the error when there is one" <|
                 \_ ->
@@ -29,6 +31,30 @@ theValidatorTests =
             , test "rejects an invalid model" <|
                 \_ ->
                     isValid aValidator ""
+                        |> Expect.equal False
+            ]
+        , describe "parameterized" <|
+            let
+                aValidator =
+                    Validator.parameterized
+                        (flip (<) 3)
+                        (\n -> toString n ++ " should be lower than 3!")
+            in
+            [ fuzz (intRange 3 1000) "reports the error when there is one, using the parameter" <|
+                \n ->
+                    validate aValidator n
+                        |> Expect.equal [ toString n ++ " should be lower than 3!" ]
+            , fuzz (intRange -1000 2) "reports no error when there is none" <|
+                \n ->
+                    validate aValidator n
+                        |> Expect.equal []
+            , fuzz (intRange -1000 2) "validates a valid model" <|
+                \n ->
+                    isValid aValidator n
+                        |> Expect.equal True
+            , fuzz (intRange 3 1000) "rejects an invalid model" <|
+                \n ->
+                    isValid aValidator n
                         |> Expect.equal False
             ]
         , describe "all" <|
