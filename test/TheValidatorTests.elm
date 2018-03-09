@@ -228,6 +228,27 @@ theValidatorTests =
                             |> Expect.equal True
                 ]
             ]
+        , describe "list" <|
+            let
+                positive =
+                    Validator.simple (flip (>) 0) "is not positive"
+
+                allPositive =
+                    Validator.list (\index error -> ( index, error )) positive
+            in
+            [ fuzz (Fuzz.list (intRange -1000 0)) "it shows errors on each invalid items" <|
+                \elements ->
+                    validate allPositive elements
+                        |> Expect.equal (List.indexedMap (\index error -> ( index, "is not positive" )) elements)
+            , fuzz (Fuzz.tuple3 ( Fuzz.list (intRange 1 1000), intRange -1000 0, Fuzz.list (intRange 1 1000) )) "it shows errors only on invalid items" <|
+                \( before, bad, after ) ->
+                    validate allPositive (before ++ [ bad ] ++ after)
+                        |> Expect.equal [ ( List.length before, "is not positive" ) ]
+            , fuzz (Fuzz.list (intRange 1 1000)) "it shows no error on valid items" <|
+                \elements ->
+                    validate allPositive elements
+                        |> Expect.equal []
+            ]
         ]
 
 
