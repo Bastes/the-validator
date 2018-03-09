@@ -278,22 +278,28 @@ well as the error obtained by the internal validator.
 
     justRight = all [tooHot, tooCold]
 
-    goldilocks = list (\index error -> (index, error)) justRight
+    goldilocks = list
+      (\index model error -> (index, model.owner ++ "'s cup:", error))
+      justRight
 
-    validate goldilocks cups == [(1, "it's too hot!"), (2, "it's too cold!")]
+    validate goldilocks cups ==
+      [ (1, "Mama Bear's cup:", "it's too hot!")
+      , (2, "Papa Bear's cup:", "it's too cold!")
+      ]
 
 -}
-list : (Int -> errorA -> errorB) -> Validator errorA model -> Validator errorB (List model)
+list : (Int -> model -> errorA -> errorB) -> Validator errorA model -> Validator errorB (List model)
 list transformation validator =
     case validator of
         Simple error isValid ->
             let
-                indexedError index =
-                    validate (validator |> map (transformation index))
+                indexedError index item =
+                    validate (validator |> map (transformation index item)) item
 
-                listError =
-                    List.indexedMap indexedError
-                        >> List.concat
+                listError items =
+                    items
+                        |> List.indexedMap indexedError
+                        |> List.concat
             in
             Simple listError (List.all isValid)
 
