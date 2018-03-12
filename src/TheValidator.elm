@@ -250,11 +250,11 @@ errors. Shortcut for `focus` then `map`.
         simple ((/=) "password") "'password' is not a very good password"
 
     userValidator =
-        focusMap .password (\error -> "for realz " ++ error) passwordValidator
+        focusMap .password (\{login} error -> "for realz, " ++ login ++ " " ++ error) passwordValidator
 
     user = { name = "Carl Streator", password = "password" }
 
-    validate userValidator == ["for realz 'password' is not a very good password"]
+    validate userValidator == ["for realz Carl Streator 'password' is not a very good password"]
 
 -}
 focusMap : (modelB -> modelA) -> (modelB -> errorA -> errorB) -> Validator errorA modelA -> Validator errorB modelB
