@@ -192,10 +192,10 @@ all validators =
 function handles the transformation from one error type to the other.
 
     onlyTrue = simple ((==) True) "This is simply not True!"
-    onlyMoreTrue = onlyTrue |> map (\error -> ["No!", error, "It is False!"])
+    onlyMoreTrue = onlyTrue |> map (\model error -> (error, "It is simply", model, "!"))
 
     validate onlyTrue False == ["This is simply not True!"]
-    validate onlyMoreTrue False == ["No!", "This is simply not True!", "It is False!"]
+    validate onlyMoreTrue False == ("This is simply not True!", "It is simply", False, "!")
 
 -}
 map : (model -> errorA -> errorB) -> Validator errorA model -> Validator errorB model
