@@ -139,14 +139,14 @@ theValidatorTests =
                         [ positive
                         , notFactorOf3
                         ]
-                        |> Validator.map (\error -> [ "the number", error ])
+                        |> Validator.map (\n error -> ( "the number", n, error ))
             in
             [ fuzz aFactorOf3 "it maps over all errors" <|
                 \n ->
                     validate positiveAndNotFactorOf3 n
                         |> Expect.equal
-                            [ [ "the number", "needs to be positive" ]
-                            , [ "the number", toString n ++ " needs not be a factor of 3" ]
+                            [ ( "the number", n, "needs to be positive" )
+                            , ( "the number", n, toString n ++ " needs not be a factor of 3" )
                             ]
             , fuzz aNonFactorOf3 "it does not return errors when there are none" <|
                 \n ->

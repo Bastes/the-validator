@@ -198,11 +198,11 @@ function handles the transformation from one error type to the other.
     validate onlyMoreTrue False == ["No!", "This is simply not True!", "It is False!"]
 
 -}
-map : (errorA -> errorB) -> Validator errorA model -> Validator errorB model
+map : (model -> errorA -> errorB) -> Validator errorA model -> Validator errorB model
 map transformation validator =
     case validator of
         Simple error isValid ->
-            Simple (error >> List.map transformation) isValid
+            Simple (\item -> item |> error |> List.map (transformation item)) isValid
 
         Composite validators ->
             Composite <| List.map (map transformation) validators
@@ -259,7 +259,7 @@ errors. Shortcut for `focus` then `map`.
 -}
 focusMap : (modelB -> modelA) -> (errorA -> errorB) -> Validator errorA modelA -> Validator errorB modelB
 focusMap modelTransformation errorTransformation =
-    focus modelTransformation >> map errorTransformation
+    focus modelTransformation >> map (always errorTransformation)
 
 
 {-| Makes a validator that applies another validator to a list of elements.
@@ -294,7 +294,7 @@ list transformation validator =
         Simple error isValid ->
             let
                 indexedError index item =
-                    validate (validator |> map (transformation index item)) item
+                    validate (validator |> map (always (transformation index item))) item
 
                 listError items =
                     items
