@@ -205,4 +205,30 @@ do that with TheValidator?
 Easily:
 
 ```elm
+type alias Models =
+  List Model
+
+validModels =
+  validModel
+    |> TheValidator.list
+      (\index model error ->
+        "#" ++ index ++ " (" ++ model.firstName ++ " " ++ model.lastName ++ ") " ++ error
+      )
 ```
+
+The `validModels` validator will validate a `List Model` and pass only when all
+items pass, returning all error with the index, first and last name of the
+incriminated item.
+
+
+## Credits
+
+This library was freely inspired by rtfeldman's (https://github.com/rtfeldman),
+elm-validate (https://github.com/rtfeldman/elm-validate) library.
+I would have used it instead but for the lack of ability to nest validations
+deeply.
+
+## Boring license stuff
+
+This library is licenced under GPLv3. Check out the LICENSE file for more on
+this topic.
