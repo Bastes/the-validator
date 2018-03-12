@@ -293,8 +293,8 @@ list transformation validator =
     case validator of
         Simple error isValid ->
             let
-                indexedError index item =
-                    validate (validator |> map (always (transformation index item))) item
+                indexedError index =
+                    validate (validator |> map (transformation index))
 
                 listError items =
                     items
