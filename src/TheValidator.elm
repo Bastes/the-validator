@@ -257,9 +257,9 @@ errors. Shortcut for `focus` then `map`.
     validate userValidator == ["for realz 'password' is not a very good password"]
 
 -}
-focusMap : (modelB -> modelA) -> (errorA -> errorB) -> Validator errorA modelA -> Validator errorB modelB
+focusMap : (modelB -> modelA) -> (modelB -> errorA -> errorB) -> Validator errorA modelA -> Validator errorB modelB
 focusMap modelTransformation errorTransformation =
-    focus modelTransformation >> map (always errorTransformation)
+    focus modelTransformation >> map errorTransformation
 
 
 {-| Makes a validator that applies another validator to a list of elements.

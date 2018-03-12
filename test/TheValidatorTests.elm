@@ -163,6 +163,9 @@ theValidatorTests =
             ]
         , describe "focus, focusMap" <|
             let
+                names =
+                    [ "Oyuki-Chan", "David Mills", "Mr. Tulip", "Debra Morgan", "Sandor Clegane" ]
+
                 naughtyNicks =
                     [ "bugger", "jay", "dunderhead", "fribble", "gadabout" ]
 
@@ -174,57 +177,72 @@ theValidatorTests =
                         }
                         string
 
+                aNaughtyCall =
+                    Fuzz.tuple ( oneOfThese names, oneOfThese naughtyNicks )
+                        |> Fuzz.map
+                            (\( name, isCallingYou ) ->
+                                { name = name, isCallingYou = isCallingYou }
+                            )
+
+                aNonNaughtyCall =
+                    Fuzz.tuple ( oneOfThese names, aNonNaughtyNick )
+                        |> Fuzz.map
+                            (\( name, isCallingYou ) ->
+                                { name = name, isCallingYou = isCallingYou }
+                            )
+
                 polite =
                     Validator.parameterized
                         (not << flip List.member naughtyNicks)
-                        (\name -> "please refrain from calling me a " ++ name)
+                        (\isCallingYou -> [ "please refrain from calling me a", isCallingYou ])
             in
             [ describe "focus" <|
                 let
-                    politeGentleman =
-                        Validator.focus .name polite
+                    politesse =
+                        Validator.focus .isCallingYou polite
                 in
-                [ fuzz (oneOfThese naughtyNicks) "it shows the errors on the detail" <|
-                    \nick ->
-                        validate politeGentleman { name = nick }
-                            |> Expect.equal [ "please refrain from calling me a " ++ nick ]
-                , fuzz aNonNaughtyNick "it shows no error when there is none" <|
-                    \nick ->
-                        validate politeGentleman { name = nick }
+                [ fuzz aNaughtyCall "it shows the errors on the detail" <|
+                    \call ->
+                        validate politesse call
+                            |> Expect.equal
+                                [ [ "please refrain from calling me a", call.isCallingYou ] ]
+                , fuzz aNonNaughtyCall "it shows no error when there is none" <|
+                    \call ->
+                        validate politesse call
                             |> Expect.equal []
-                , fuzz (oneOfThese naughtyNicks) "if fails when the model is invalid" <|
-                    \nick ->
-                        isValid politeGentleman { name = nick }
+                , fuzz aNaughtyCall "if fails when the model is invalid" <|
+                    \call ->
+                        isValid politesse call
                             |> Expect.equal False
-                , fuzz aNonNaughtyNick "succeeds when the model is valid" <|
-                    \nick ->
-                        isValid politeGentleman { name = nick }
+                , fuzz aNonNaughtyCall "succeeds when the model is valid" <|
+                    \call ->
+                        isValid politesse call
                             |> Expect.equal True
                 ]
             , describe "focusMap" <|
                 let
-                    politeGentleman =
+                    politesse =
                         Validator.focusMap
-                            .name
-                            (\error -> [ "Dear sir", error, "will you?" ])
+                            .isCallingYou
+                            (\{ name } error -> [ name, "dear" ] ++ error ++ [ "will you?" ])
                             polite
                 in
-                [ fuzz (oneOfThese naughtyNicks) "it shows the wrapped errors on the detail" <|
-                    \nick ->
-                        validate politeGentleman { name = nick }
+                [ fuzz aNaughtyCall "it shows the wrapped errors on the detail" <|
+                    \call ->
+                        validate politesse call
                             |> Expect.equal
-                                [ [ "Dear sir", "please refrain from calling me a " ++ nick, "will you?" ] ]
-                , fuzz aNonNaughtyNick "it shows no error when there is none" <|
-                    \nick ->
-                        validate politeGentleman { name = nick }
+                                [ [ call.name, "dear", "please refrain from calling me a", call.isCallingYou, "will you?" ] ]
+                , fuzz aNonNaughtyCall "it shows no error when there is none" <|
+                    \call ->
+                        validate politesse call
                             |> Expect.equal []
-                , fuzz (oneOfThese naughtyNicks) "if fails when the model is invalid" <|
-                    \nick ->
-                        isValid politeGentleman { name = nick }
+                , fuzz aNaughtyCall "if fails when the model is invalid" <|
+                    \call ->
+                        isValid politesse call
                             |> Expect.equal False
-                , fuzz aNonNaughtyNick "succeeds when the model is valid" <|
-                    \nick ->
-                        isValid politeGentleman { name = nick }
+                , fuzz aNonNaughtyCall "succeeds when the model is valid" <|
+                    \call ->
+                        isValid politesse call
                             |> Expect.equal True
                 ]
             ]
