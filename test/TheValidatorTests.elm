@@ -170,6 +170,32 @@ theValidatorTests =
                     Validator.parameterized
                         (not << flip List.member naughtyNicks)
                         (\isCallingYou -> [ "please refrain from calling me a", isCallingYou ])
+
+                smart =
+                    Validator.all
+                        [ simple (.luck >> flip (>) 5) "is quite unlucky"
+                        , simple (.intelligence >> flip (>) 5) "is pretty dumb"
+                        ]
+
+                personFromTuple ( name, luck, intelligence ) =
+                    { name = name
+                    , special =
+                        { luck = luck
+                        , intelligence = intelligence
+                        }
+                    }
+
+                aDumbLuckyGuy =
+                    Fuzz.tuple3 ( string, intRange 6 10, intRange 1 5 )
+                        |> Fuzz.map personFromTuple
+
+                aDumbUnluckyGuy =
+                    Fuzz.tuple3 ( string, intRange 1 5, intRange 1 5 )
+                        |> Fuzz.map personFromTuple
+
+                aSmartGuy =
+                    Fuzz.tuple3 ( string, intRange 6 10, intRange 6 10 )
+                        |> Fuzz.map personFromTuple
             in
             [ describe "focus"
                 [ describe "with a single original validator" <|
@@ -191,40 +217,8 @@ theValidatorTests =
                     ]
                 , describe "with a composite original validator" <|
                     let
-                        lucky =
-                            simple (.luck >> flip (>) 5) "is quite unlucky"
-
-                        clever =
-                            simple (.intelligence >> flip (>) 5) "is pretty dumb"
-
-                        smart =
-                            Validator.all
-                                [ lucky
-                                , clever
-                                ]
-
                         smartGuy =
                             focus .special smart
-
-                        personFromTuple ( name, luck, intelligence ) =
-                            { name = name
-                            , special =
-                                { luck = luck
-                                , intelligence = intelligence
-                                }
-                            }
-
-                        aDumbLuckyGuy =
-                            Fuzz.tuple3 ( string, intRange 6 10, intRange 1 5 )
-                                |> Fuzz.map personFromTuple
-
-                        aDumbUnluckyGuy =
-                            Fuzz.tuple3 ( string, intRange 1 5, intRange 1 5 )
-                                |> Fuzz.map personFromTuple
-
-                        aSmartGuy =
-                            Fuzz.tuple3 ( string, intRange 6 10, intRange 6 10 )
-                                |> Fuzz.map personFromTuple
                     in
                     [ fuzz aDumbUnluckyGuy "it shows all errors on the detail" <|
                         \lucklessDummy ->
@@ -247,25 +241,55 @@ theValidatorTests =
                                 |> expectValidity
                     ]
                 ]
-            , describe "focusMap" <|
-                let
-                    politesse =
-                        Validator.focusMap
-                            .isCallingYou
-                            (\{ name } error -> [ name, "dear" ] ++ error ++ [ "will you?" ])
-                            polite
-                in
-                [ fuzz aNaughtyCall "it shows the wrapped errors on the detail" <|
-                    \call ->
-                        politesse
-                            |> validating call
-                            |> expectAnError
-                                [ call.name, "dear", "please refrain from calling me a", call.isCallingYou, "will you?" ]
-                , fuzz aNonNaughtyCall "it shows no error when there is none" <|
-                    \call ->
-                        politesse
-                            |> validating call
-                            |> expectValidity
+            , describe "focusMap"
+                [ describe "with a simple validator" <|
+                    let
+                        politesse =
+                            Validator.focusMap
+                                .isCallingYou
+                                (\{ name } error -> [ name, "dear" ] ++ error ++ [ "will you?" ])
+                                polite
+                    in
+                    [ fuzz aNaughtyCall "it shows the wrapped errors on the detail" <|
+                        \call ->
+                            politesse
+                                |> validating call
+                                |> expectAnError
+                                    [ call.name, "dear", "please refrain from calling me a", call.isCallingYou, "will you?" ]
+                    , fuzz aNonNaughtyCall "it shows no error when there is none" <|
+                        \call ->
+                            politesse
+                                |> validating call
+                                |> expectValidity
+                    ]
+                , describe "with a composite validator" <|
+                    let
+                        smartGuy =
+                            Validator.focusMap
+                                .special
+                                (\{ name } error -> [ name, error ])
+                                smart
+                    in
+                    [ fuzz aDumbUnluckyGuy "it shows all errors on the detail" <|
+                        \lucklessDummy ->
+                            smartGuy
+                                |> validating lucklessDummy
+                                |> expectErrors
+                                    [ [ lucklessDummy.name, "is quite unlucky" ]
+                                    , [ lucklessDummy.name, "is pretty dumb" ]
+                                    ]
+                    , fuzz aDumbLuckyGuy "it shows the errors on the detail" <|
+                        \dummy ->
+                            smartGuy
+                                |> validating dummy
+                                |> expectAnError
+                                    [ dummy.name, "is pretty dumb" ]
+                    , fuzz aSmartGuy "it shows no error when there is none" <|
+                        \guy ->
+                            smartGuy
+                                |> validating guy
+                                |> expectValidity
+                    ]
                 ]
             ]
         , describe "maybe" <|
