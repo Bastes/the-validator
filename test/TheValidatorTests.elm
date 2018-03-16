@@ -16,22 +16,16 @@ theValidatorTests =
                         ((/=) "")
                         "Hey, this string is blank! WTF dude?"
             in
-            [ test "reports the error when there is one" <|
+            [ test "rejects invalid models with the error" <|
                 \_ ->
-                    validate aValidator ""
-                        |> Expect.equal [ "Hey, this string is blank! WTF dude?" ]
-            , test "show no error when there is none" <|
-                \_ ->
-                    validate aValidator "non-blank"
-                        |> Expect.equal []
-            , test "validates a valid model" <|
-                \_ ->
-                    isValid aValidator "absolutely not blank"
-                        |> Expect.equal True
-            , test "rejects an invalid model" <|
-                \_ ->
-                    isValid aValidator ""
-                        |> Expect.equal False
+                    aValidator
+                        |> validating ""
+                        |> expectAnError "Hey, this string is blank! WTF dude?"
+            , fuzz aNonEmptyString "accepts a valid model" <|
+                \anything ->
+                    aValidator
+                        |> validating anything
+                        |> expectValidity
             ]
         , describe "parameterized" <|
             let
@@ -40,42 +34,30 @@ theValidatorTests =
                         (flip (<) 3)
                         (\n -> toString n ++ " should be lower than 3!")
             in
-            [ fuzz (intRange 3 1000) "reports the error when there is one, using the parameter" <|
+            [ fuzz (intRange 3 1000) "reports the error, using the model's value" <|
                 \n ->
-                    validate aValidator n
-                        |> Expect.equal [ toString n ++ " should be lower than 3!" ]
-            , fuzz (intRange -1000 2) "reports no error when there is none" <|
-                \n ->
-                    validate aValidator n
-                        |> Expect.equal []
+                    aValidator
+                        |> validating n
+                        |> expectAnError (toString n ++ " should be lower than 3!")
             , fuzz (intRange -1000 2) "validates a valid model" <|
                 \n ->
-                    isValid aValidator n
-                        |> Expect.equal True
-            , fuzz (intRange 3 1000) "rejects an invalid model" <|
-                \n ->
-                    isValid aValidator n
-                        |> Expect.equal False
+                    aValidator
+                        |> validating n
+                        |> expectValidity
             ]
         , describe "invalid" <|
             [ fuzz int "it always reports a failure, no matter what the input" <|
                 \n ->
-                    validate (Validator.invalid "this is always invalid") n
-                        |> Expect.equal [ "this is always invalid" ]
-            , fuzz int "it is never valid, no matter what the input" <|
-                \n ->
-                    isValid (Validator.invalid "this is always invalid") n
-                        |> Expect.equal False
+                    Validator.invalid "this is always invalid"
+                        |> validating n
+                        |> expectAnError "this is always invalid"
             ]
         , describe "valid" <|
             [ fuzz int "it never reports a failure, no matter what the input" <|
                 \n ->
-                    validate Validator.valid n
-                        |> Expect.equal []
-            , fuzz int "it is always valid, no matter what the input" <|
-                \n ->
-                    isValid Validator.valid n
-                        |> Expect.equal True
+                    Validator.valid
+                        |> validating n
+                        |> expectValidity
             ]
         , describe "all" <|
             let
@@ -101,26 +83,21 @@ theValidatorTests =
                         , notFizzBuzz
                         ]
             in
-            [ test "it reports all errors when all are triggered" <|
-                \_ ->
-                    validate noneOfTheseFizzAndBuzzes 15
-                        |> Expect.equal [ "not fizz!", "not buzz!", "not fizzbuzz!" ]
-            , test "it reports only the subset of errors that are triggered" <|
-                \_ ->
-                    validate noneOfTheseFizzAndBuzzes 5
-                        |> Expect.equal [ "not buzz!" ]
+            [ fuzz aFizzBuzzInt "it reports all errors when all are triggered" <|
+                \n ->
+                    noneOfTheseFizzAndBuzzes
+                        |> validating n
+                        |> expectErrors [ "not fizz!", "not buzz!", "not fizzbuzz!" ]
+            , fuzz aBuzzOnlyInt "it reports only the subset of errors that are triggered" <|
+                \n ->
+                    noneOfTheseFizzAndBuzzes
+                        |> validating n
+                        |> expectAnError "not buzz!"
             , fuzz aNonFizzBuzzInt "it reports nothing when there's nothing to report" <|
                 \n ->
-                    validate noneOfTheseFizzAndBuzzes n
-                        |> Expect.equal []
-            , fuzz aNonFizzBuzzInt "it is valid when all validators pass" <|
-                \n ->
-                    isValid noneOfTheseFizzAndBuzzes n
-                        |> Expect.equal True
-            , fuzz aFizzBuzzInt "it is invalid as soon as a validator refuses" <|
-                \n ->
-                    isValid noneOfTheseFizzAndBuzzes n
-                        |> Expect.equal False
+                    noneOfTheseFizzAndBuzzes
+                        |> validating n
+                        |> expectValidity
             ]
         , describe "map" <|
             let
@@ -143,23 +120,17 @@ theValidatorTests =
             in
             [ fuzz aFactorOf3 "it maps over all errors" <|
                 \n ->
-                    validate positiveAndNotFactorOf3 n
-                        |> Expect.equal
+                    positiveAndNotFactorOf3
+                        |> validating n
+                        |> expectErrors
                             [ ( "the number", n, "needs to be positive" )
                             , ( "the number", n, toString n ++ " needs not be a factor of 3" )
                             ]
-            , fuzz aNonFactorOf3 "it does not return errors when there are none" <|
+            , fuzz aNonFactorOf3 "it does not report errors when there are none" <|
                 \n ->
-                    validate positiveAndNotFactorOf3 n
-                        |> Expect.equal []
-            , fuzz aFactorOf3 "it rejects an invalid model" <|
-                \n ->
-                    isValid positiveAndNotFactorOf3 n
-                        |> Expect.equal False
-            , fuzz aNonFactorOf3 "it validates a valid model" <|
-                \n ->
-                    isValid positiveAndNotFactorOf3 n
-                        |> Expect.equal True
+                    positiveAndNotFactorOf3
+                        |> validating n
+                        |> expectValidity
             ]
         , describe "focus, focusMap" <|
             let
@@ -181,14 +152,18 @@ theValidatorTests =
                     Fuzz.tuple ( oneOfThese names, oneOfThese naughtyNicks )
                         |> Fuzz.map
                             (\( name, isCallingYou ) ->
-                                { name = name, isCallingYou = isCallingYou }
+                                { name = name
+                                , isCallingYou = isCallingYou
+                                }
                             )
 
                 aNonNaughtyCall =
                     Fuzz.tuple ( oneOfThese names, aNonNaughtyNick )
                         |> Fuzz.map
                             (\( name, isCallingYou ) ->
-                                { name = name, isCallingYou = isCallingYou }
+                                { name = name
+                                , isCallingYou = isCallingYou
+                                }
                             )
 
                 polite =
@@ -203,21 +178,15 @@ theValidatorTests =
                 in
                 [ fuzz aNaughtyCall "it shows the errors on the detail" <|
                     \call ->
-                        validate politesse call
-                            |> Expect.equal
-                                [ [ "please refrain from calling me a", call.isCallingYou ] ]
+                        politesse
+                            |> validating call
+                            |> expectAnError
+                                [ "please refrain from calling me a", call.isCallingYou ]
                 , fuzz aNonNaughtyCall "it shows no error when there is none" <|
                     \call ->
-                        validate politesse call
-                            |> Expect.equal []
-                , fuzz aNaughtyCall "if fails when the model is invalid" <|
-                    \call ->
-                        isValid politesse call
-                            |> Expect.equal False
-                , fuzz aNonNaughtyCall "succeeds when the model is valid" <|
-                    \call ->
-                        isValid politesse call
-                            |> Expect.equal True
+                        politesse
+                            |> validating call
+                            |> expectValidity
                 ]
             , describe "focusMap" <|
                 let
@@ -229,21 +198,15 @@ theValidatorTests =
                 in
                 [ fuzz aNaughtyCall "it shows the wrapped errors on the detail" <|
                     \call ->
-                        validate politesse call
-                            |> Expect.equal
-                                [ [ call.name, "dear", "please refrain from calling me a", call.isCallingYou, "will you?" ] ]
+                        politesse
+                            |> validating call
+                            |> expectAnError
+                                [ call.name, "dear", "please refrain from calling me a", call.isCallingYou, "will you?" ]
                 , fuzz aNonNaughtyCall "it shows no error when there is none" <|
                     \call ->
-                        validate politesse call
-                            |> Expect.equal []
-                , fuzz aNaughtyCall "if fails when the model is invalid" <|
-                    \call ->
-                        isValid politesse call
-                            |> Expect.equal False
-                , fuzz aNonNaughtyCall "succeeds when the model is valid" <|
-                    \call ->
-                        isValid politesse call
-                            |> Expect.equal True
+                        politesse
+                            |> validating call
+                            |> expectValidity
                 ]
             ]
         , describe "maybe" <|
@@ -257,17 +220,17 @@ theValidatorTests =
                     \_ ->
                         maybeValidator
                             |> validating { name = "Jon Snow", knows = Nothing }
-                            |> Expect.equal ( True, [] )
+                            |> expectValidity
                 , test "fails when there is something that fails" <|
                     \_ ->
                         maybeValidator
                             |> validating { name = "Socrates", knows = Just "" }
-                            |> Expect.equal ( False, [ "all I know is I should know Nothing or Just something instead" ] )
+                            |> expectAnError "all I know is I should know Nothing or Just something instead"
                 , fuzz aNonEmptyString "succeeds when there is something that succeeds" <|
                     \anything ->
                         maybeValidator
                             |> validating { name = "Dr. Manhattan", knows = Just anything }
-                            |> Expect.equal ( True, [] )
+                            |> expectValidity
                 ]
             , describe "with a composite validator" <|
                 let
@@ -283,17 +246,17 @@ theValidatorTests =
                     \_ ->
                         maybeCompositeValidator
                             |> validating { name = "Maynard", counts = Nothing }
-                            |> Expect.equal ( True, [] )
+                            |> expectValidity
                 , test "fails when there is something that fails" <|
                     \_ ->
                         maybeCompositeValidator
                             |> validating { name = "Arthur", counts = Just 5 }
-                            |> Expect.equal ( False, [ "five is right out" ] )
+                            |> expectAnError "five is right out"
                 , fuzz (intRange 6 1000) "succeeds when there is something that succeeds" <|
                     \theCount ->
                         maybeCompositeValidator
                             |> validating { name = "Galahad", counts = Just theCount }
-                            |> Expect.equal ( True, [] )
+                            |> expectValidity
                 ]
             ]
         , describe "list" <|
@@ -304,10 +267,11 @@ theValidatorTests =
                 allPositive =
                     Validator.list (\index model error -> ( index, model, error )) positive
             in
-            [ fuzz (Fuzz.list (intRange -1000 0)) "it shows errors on each invalid items" <|
+            [ fuzz (aListOfAtLeastOne (intRange -1000 0)) "it shows errors on each invalid items" <|
                 \elements ->
-                    validate allPositive elements
-                        |> Expect.equal
+                    allPositive
+                        |> validating elements
+                        |> expectErrors
                             (List.indexedMap
                                 (\index model -> ( index, model, "is not positive" ))
                                 elements
@@ -322,12 +286,14 @@ theValidatorTests =
                 "it shows errors only on invalid items"
               <|
                 \( before, bad, after ) ->
-                    validate allPositive (before ++ [ bad ] ++ after)
-                        |> Expect.equal [ ( List.length before, bad, "is not positive" ) ]
+                    allPositive
+                        |> validating (before ++ [ bad ] ++ after)
+                        |> expectAnError ( List.length before, bad, "is not positive" )
             , fuzz (Fuzz.list (intRange 1 1000)) "it shows no error on valid items" <|
                 \elements ->
-                    validate allPositive elements
-                        |> Expect.equal []
+                    allPositive
+                        |> validating elements
+                        |> expectValidity
             ]
         ]
 
@@ -346,6 +312,21 @@ validating model validator =
     applyBoth (applyBoth ( isValid, validate ) validator) model
 
 
+expectValidity : ( Bool, List error ) -> Expect.Expectation
+expectValidity =
+    Expect.equal ( True, [] )
+
+
+expectAnError : error -> ( Bool, List error ) -> Expect.Expectation
+expectAnError error =
+    expectErrors [ error ]
+
+
+expectErrors : List error -> ( Bool, List error ) -> Expect.Expectation
+expectErrors errors =
+    Expect.equal ( False, errors )
+
+
 oneOfThese : List a -> Fuzzer a
 oneOfThese =
     oneOf << List.map constant
@@ -353,9 +334,17 @@ oneOfThese =
 
 aFizzBuzzInt : Fuzzer Int
 aFizzBuzzInt =
-    constant (*)
-        |> andMap (oneOfThese [ 3, 5, 15 ])
-        |> andMap (intRange 1 1000)
+    intRange 1 1000 |> Fuzz.map ((*) 15)
+
+
+aListOfAtLeastOne : Fuzzer a -> Fuzzer (List a)
+aListOfAtLeastOne =
+    conditional
+        { retries = 10
+        , fallback = always []
+        , condition = not << List.isEmpty
+        }
+        << Fuzz.list
 
 
 aNonFizzBuzzInt : Fuzzer Int
@@ -366,6 +355,11 @@ aNonFizzBuzzInt =
         , condition = \n -> (n % 3 /= 0) && (n % 5 /= 0)
         }
         (intRange 1 1000)
+
+
+aBuzzOnlyInt : Fuzzer Int
+aBuzzOnlyInt =
+    aNonFactorOf3 |> Fuzz.map ((*) 5)
 
 
 aFactorOf3 : Fuzzer Int
