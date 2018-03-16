@@ -259,41 +259,96 @@ theValidatorTests =
                             |> expectValidity
                 ]
             ]
-        , describe "list" <|
-            let
-                positive =
-                    Validator.simple (flip (>) 0) "is not positive"
+        , describe "list"
+            [ describe "with a simple validator" <|
+                let
+                    positive =
+                        Validator.simple (flip (>) 0) "is not positive"
 
-                allPositive =
-                    Validator.list (\index model error -> ( index, model, error )) positive
-            in
-            [ fuzz (aListOfAtLeastOne (intRange -1000 0)) "it shows errors on each invalid items" <|
-                \elements ->
-                    allPositive
-                        |> validating elements
-                        |> expectErrors
-                            (List.indexedMap
-                                (\index model -> ( index, model, "is not positive" ))
-                                elements
-                            )
-            , fuzz
-                (Fuzz.tuple3
-                    ( Fuzz.list (intRange 1 1000)
-                    , intRange -1000 0
-                    , Fuzz.list (intRange 1 1000)
+                    allPositive =
+                        Validator.list
+                            (\index model error -> ( index, model, error ))
+                            positive
+                in
+                [ fuzz (aListOfAtLeastOne (intRange -1000 0)) "it shows errors on each invalid items" <|
+                    \elements ->
+                        allPositive
+                            |> validating elements
+                            |> expectErrors
+                                (List.indexedMap
+                                    (\index model -> ( index, model, "is not positive" ))
+                                    elements
+                                )
+                , fuzz
+                    (Fuzz.tuple3
+                        ( Fuzz.list (intRange 1 1000)
+                        , intRange -1000 0
+                        , Fuzz.list (intRange 1 1000)
+                        )
                     )
-                )
-                "it shows errors only on invalid items"
-              <|
-                \( before, bad, after ) ->
-                    allPositive
-                        |> validating (before ++ [ bad ] ++ after)
-                        |> expectAnError ( List.length before, bad, "is not positive" )
-            , fuzz (Fuzz.list (intRange 1 1000)) "it shows no error on valid items" <|
-                \elements ->
-                    allPositive
-                        |> validating elements
-                        |> expectValidity
+                    "it shows errors only on invalid items"
+                  <|
+                    \( before, bad, after ) ->
+                        allPositive
+                            |> validating (before ++ [ bad ] ++ after)
+                            |> expectAnError ( List.length before, bad, "is not positive" )
+                , fuzz (Fuzz.list (intRange 1 1000)) "it shows no error on valid items" <|
+                    \elements ->
+                        allPositive
+                            |> validating elements
+                            |> expectValidity
+                ]
+            , describe "with a composite validator" <|
+                let
+                    positive =
+                        Validator.simple (flip (>) 0) "is not positive"
+
+                    under100 =
+                        Validator.simple (flip (<) 100) "is over 99"
+
+                    positiveUnder100 =
+                        Validator.all
+                            [ positive
+                            , under100
+                            ]
+
+                    allPositiveUnder100 =
+                        Validator.list
+                            (\index model error -> ( index, model, error ))
+                            positiveUnder100
+                in
+                [ fuzz (aListOfAtLeastOne (intRange -1000 0)) "it shows errors on each invalid items" <|
+                    \elements ->
+                        allPositiveUnder100
+                            |> validating elements
+                            |> expectErrors
+                                (List.indexedMap
+                                    (\index model -> ( index, model, "is not positive" ))
+                                    elements
+                                )
+                , fuzz
+                    (Fuzz.tuple4
+                        ( Fuzz.list (intRange 1 99)
+                        , intRange -1000 0
+                        , intRange 100 1000
+                        , Fuzz.list (intRange 1 99)
+                        )
+                    )
+                    "it shows errors only on invalid items"
+                  <|
+                    \( before, bad1, bad2, after ) ->
+                        allPositiveUnder100
+                            |> validating (before ++ [ bad1, bad2 ] ++ after)
+                            |> expectErrors
+                                [ ( List.length before, bad1, "is not positive" )
+                                , ( List.length before + 1, bad2, "is over 99" )
+                                ]
+                , fuzz (Fuzz.list (intRange 1 99)) "it shows no error on valid items" <|
+                    \elements ->
+                        allPositiveUnder100
+                            |> validating elements
+                            |> expectValidity
+                ]
             ]
         ]
 
