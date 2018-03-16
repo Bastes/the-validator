@@ -254,7 +254,7 @@ errors. Shortcut for `focus` then `map`.
 
     user = { name = "Carl Streator", password = "password" }
 
-    validate userValidator == ["for realz Carl Streator 'password' is not a very good password"]
+    validate userValidator user == ["for realz Carl Streator 'password' is not a very good password"]
 
 -}
 focusMap : (modelB -> modelA) -> (modelB -> errorA -> errorB) -> Validator errorA modelA -> Validator errorB modelB
