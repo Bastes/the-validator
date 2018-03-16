@@ -9,6 +9,7 @@ module TheValidator
         , isValid
         , list
         , map
+        , maybe
         , parameterized
         , simple
         , valid
@@ -38,7 +39,7 @@ holding the validation logic and allowing for composition.
 
 # Validator Composition
 
-@docs all, map, focus, focusMap, list
+@docs all, map, focus, focusMap, maybe, list
 
 -}
 
@@ -260,6 +261,35 @@ errors. Shortcut for `focus` then `map`.
 focusMap : (modelB -> modelA) -> (modelB -> errorA -> errorB) -> Validator errorA modelA -> Validator errorB modelB
 focusMap modelTransformation errorTransformation =
     focus modelTransformation >> map errorTransformation
+
+
+{-| Focuses on a value that may or may not be available for validation.
+When there is nothing, the validation succeeds by default.
+
+    notBlank = simple ((/=) "") "filled or nothing"
+    nameNotBlank = maybe .name notBlank
+
+    isValid notBlank { name = Nothing } == True
+    validate notBlank { name = Nothing } == []
+    isValid notBlank { name = Just "Someone" } == True
+    validate notBlank { name = Just "Me" } == []
+    isValid notBlank { name = Just "" } == False
+    validate notBlank { name = Just "" } == ["filled or nothing"]
+
+-}
+maybe : (modelB -> Maybe modelA) -> Validator error modelA -> Validator error modelB
+maybe transformation validator =
+    case validator of
+        Simple error isValid ->
+            Simple
+                (transformation >> Maybe.map error >> Maybe.withDefault [])
+                (transformation >> Maybe.map isValid >> Maybe.withDefault True)
+
+        Composite validators ->
+            Composite <| List.map (maybe transformation) validators
+
+        Valid ->
+            Valid
 
 
 {-| Makes a validator that applies another validator to a list of elements.

@@ -246,6 +246,56 @@ theValidatorTests =
                             |> Expect.equal True
                 ]
             ]
+        , describe "maybe" <|
+            [ describe "with a simple validator" <|
+                let
+                    maybeValidator =
+                        simple ((/=) "") "all I know is I should know Nothing or Just something instead"
+                            |> Validator.maybe .knows
+                in
+                [ test "always pass when there is nothing" <|
+                    \_ ->
+                        maybeValidator
+                            |> validating { name = "Jon Snow", knows = Nothing }
+                            |> Expect.equal ( True, [] )
+                , test "fails when there is something that fails" <|
+                    \_ ->
+                        maybeValidator
+                            |> validating { name = "Socrates", knows = Just "" }
+                            |> Expect.equal ( False, [ "all I know is I should know Nothing or Just something instead" ] )
+                , fuzz aNonEmptyString "succeeds when there is something that succeeds" <|
+                    \anything ->
+                        maybeValidator
+                            |> validating { name = "Dr. Manhattan", knows = Just anything }
+                            |> Expect.equal ( True, [] )
+                ]
+            , describe "with a composite validator" <|
+                let
+                    maybeCompositeValidator =
+                        all
+                            [ simple ((/=) 4) "four shalt thou not count"
+                            , simple ((/=) 2) "nor either count thou two"
+                            , simple ((/=) 5) "five is right out"
+                            ]
+                            |> Validator.maybe .counts
+                in
+                [ test "always pass when there is nothing" <|
+                    \_ ->
+                        maybeCompositeValidator
+                            |> validating { name = "Maynard", counts = Nothing }
+                            |> Expect.equal ( True, [] )
+                , test "fails when there is something that fails" <|
+                    \_ ->
+                        maybeCompositeValidator
+                            |> validating { name = "Arthur", counts = Just 5 }
+                            |> Expect.equal ( False, [ "five is right out" ] )
+                , fuzz (intRange 6 1000) "succeeds when there is something that succeeds" <|
+                    \theCount ->
+                        maybeCompositeValidator
+                            |> validating { name = "Galahad", counts = Just theCount }
+                            |> Expect.equal ( True, [] )
+                ]
+            ]
         , describe "list" <|
             let
                 positive =
@@ -286,6 +336,16 @@ theValidatorTests =
 -- HELPERS
 
 
+applyBoth : ( a -> b, a -> c ) -> a -> ( b, c )
+applyBoth ( aToB, aToC ) a =
+    ( aToB a, aToC a )
+
+
+validating : model -> Validator error model -> ( Bool, List error )
+validating model validator =
+    applyBoth (applyBoth ( isValid, validate ) validator) model
+
+
 oneOfThese : List a -> Fuzzer a
 oneOfThese =
     oneOf << List.map constant
@@ -321,3 +381,13 @@ aNonFactorOf3 =
         , condition = \n -> (n % 3) /= 0
         }
         (intRange 1 1000)
+
+
+aNonEmptyString : Fuzzer String
+aNonEmptyString =
+    conditional
+        { retries = 10
+        , fallback = always "time"
+        , condition = (/=) ""
+        }
+        string
