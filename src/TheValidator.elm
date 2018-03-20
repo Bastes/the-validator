@@ -56,7 +56,7 @@ The internals of this data type are not exposed, instead see the constructors
 for more details.
 -}
 type Validator model error
-    = Simple (model -> List error) (Validation model)
+    = Simple (Validation model) (model -> List error)
     | Composite (List (Validator model error))
     | Valid
 
@@ -73,7 +73,7 @@ the reasons why the model is invalid, consider using `validate` instead.
 isValid : Validator model error -> model -> Bool
 isValid validator model =
     case validator of
-        Simple error isValid ->
+        Simple isValid error ->
             isValid model
 
         Composite validators ->
@@ -98,7 +98,7 @@ the model, consider using the more efficient `isValid` instead.
 validate : Validator model error -> model -> List error
 validate validator model =
     case validator of
-        Simple error isValid ->
+        Simple isValid error ->
             if model |> isValid then
                 []
             else
@@ -120,7 +120,7 @@ validate validator model =
 -}
 simple : Validation model -> error -> Validator model error
 simple isValid error =
-    Simple (always [ error ]) isValid
+    Simple isValid (always [ error ])
 
 
 {-| A parameterized validator that composes a single error from the model.
@@ -131,7 +131,7 @@ simple isValid error =
 -}
 parameterized : Validation model -> (model -> error) -> Validator model error
 parameterized isValid error =
-    Simple (error >> flip (::) []) isValid
+    Simple isValid (error >> flip (::) [])
 
 
 {-| A validator that is always invalid. It will always provide the same error.
@@ -205,8 +205,8 @@ function handles the transformation from one error type to the other.
 mapError : (errorA -> errorB) -> Validator model errorA -> Validator model errorB
 mapError transformation validator =
     case validator of
-        Simple error isValid ->
-            Simple (error >> List.map transformation) isValid
+        Simple isValid error ->
+            Simple isValid (error >> List.map transformation)
 
         Composite validators ->
             Composite <| List.map (mapError transformation) validators
@@ -228,8 +228,8 @@ iterator function.
 mapErrorWithModel : (model -> errorA -> errorB) -> Validator model errorA -> Validator model errorB
 mapErrorWithModel transformation validator =
     case validator of
-        Simple error isValid ->
-            Simple (\model -> model |> error |> List.map (transformation model)) isValid
+        Simple isValid error ->
+            Simple isValid (\model -> model |> error |> List.map (transformation model))
 
         Composite validators ->
             Composite <| List.map (mapErrorWithModel transformation) validators
@@ -257,10 +257,10 @@ record, part of a list, etc.
 focus : (modelB -> modelA) -> Validator modelA error -> Validator modelB error
 focus transformation validator =
     case validator of
-        Simple error isValid ->
+        Simple isValid error ->
             Simple
-                (transformation >> error)
                 (transformation >> isValid)
+                (transformation >> error)
 
         Composite validators ->
             Composite <| List.map (focus transformation) validators
@@ -314,10 +314,10 @@ When there is nothing, the validation succeeds by default.
 maybe : (modelB -> Maybe modelA) -> Validator modelA error -> Validator modelB error
 maybe transformation validator =
     case validator of
-        Simple error isValid ->
+        Simple isValid error ->
             Simple
-                (transformation >> Maybe.map error >> Maybe.withDefault [])
                 (transformation >> Maybe.map isValid >> Maybe.withDefault True)
+                (transformation >> Maybe.map error >> Maybe.withDefault [])
 
         Composite validators ->
             Composite <| List.map (maybe transformation) validators
@@ -358,7 +358,7 @@ list :
     -> Validator (List model) errorB
 list transformation validator =
     case validator of
-        Simple error isValid ->
+        Simple isValid error ->
             let
                 indexedError index =
                     validate (validator |> mapError (transformation index))
@@ -368,7 +368,7 @@ list transformation validator =
                         |> List.indexedMap indexedError
                         |> List.concat
             in
-            Simple listError (List.all isValid)
+            Simple (List.all isValid) listError
 
         Composite validators ->
             Composite (validators |> List.map (list transformation))
