@@ -99,7 +99,7 @@ theValidatorTests =
                         |> validating n
                         |> expectValidity
             ]
-        , describe "map" <|
+        , describe "mapError" <|
             let
                 positive =
                     Validator.simple
@@ -116,15 +116,15 @@ theValidatorTests =
                         [ positive
                         , notFactorOf3
                         ]
-                        |> Validator.map (\n error -> ( "the number", n, error ))
+                        |> Validator.mapError (\error -> ( "the number", error ))
             in
             [ fuzz aFactorOf3 "it maps over all errors" <|
                 \n ->
                     positiveAndNotFactorOf3
                         |> validating n
                         |> expectErrors
-                            [ ( "the number", n, "needs to be positive" )
-                            , ( "the number", n, toString n ++ " needs not be a factor of 3" )
+                            [ ( "the number", "needs to be positive" )
+                            , ( "the number", toString n ++ " needs not be a factor of 3" )
                             ]
             , fuzz aNonFactorOf3 "it does not report errors when there are none" <|
                 \n ->
@@ -247,7 +247,7 @@ theValidatorTests =
                         politesse =
                             Validator.focusMap
                                 .isCallingYou
-                                (\{ name } error -> [ name, "dear" ] ++ error ++ [ "will you?" ])
+                                (\error -> error ++ [ "will you?" ])
                                 polite
                     in
                     [ fuzz aNaughtyCall "it shows the wrapped errors on the detail" <|
@@ -255,7 +255,7 @@ theValidatorTests =
                             politesse
                                 |> validating call
                                 |> expectAnError
-                                    [ call.name, "dear", "please refrain from calling me a", call.isCallingYou, "will you?" ]
+                                    [ "please refrain from calling me a", call.isCallingYou, "will you?" ]
                     , fuzz aNonNaughtyCall "it shows no error when there is none" <|
                         \call ->
                             politesse
@@ -267,7 +267,7 @@ theValidatorTests =
                         smartGuy =
                             Validator.focusMap
                                 .special
-                                (\{ name } error -> [ name, error ])
+                                (\error -> [ "that guy", error ])
                                 smart
                     in
                     [ fuzz aDumbUnluckyGuy "it shows all errors on the detail" <|
@@ -275,15 +275,15 @@ theValidatorTests =
                             smartGuy
                                 |> validating lucklessDummy
                                 |> expectErrors
-                                    [ [ lucklessDummy.name, "is quite unlucky" ]
-                                    , [ lucklessDummy.name, "is pretty dumb" ]
+                                    [ [ "that guy", "is quite unlucky" ]
+                                    , [ "that guy", "is pretty dumb" ]
                                     ]
                     , fuzz aDumbLuckyGuy "it shows the errors on the detail" <|
                         \dummy ->
                             smartGuy
                                 |> validating dummy
                                 |> expectAnError
-                                    [ dummy.name, "is pretty dumb" ]
+                                    [ "that guy", "is pretty dumb" ]
                     , fuzz aSmartGuy "it shows no error when there is none" <|
                         \guy ->
                             smartGuy
@@ -350,7 +350,7 @@ theValidatorTests =
 
                     allPositive =
                         Validator.list
-                            (\index model error -> ( index, model, error ))
+                            (\index error -> ( index, error ))
                             positive
                 in
                 [ fuzz (aListOfAtLeastOne (intRange -1000 0)) "it shows errors on each invalid items" <|
@@ -359,7 +359,7 @@ theValidatorTests =
                             |> validating elements
                             |> expectErrors
                                 (List.indexedMap
-                                    (\index model -> ( index, model, "is not positive" ))
+                                    (\index _ -> ( index, "is not positive" ))
                                     elements
                                 )
                 , fuzz
@@ -374,7 +374,7 @@ theValidatorTests =
                     \( before, bad, after ) ->
                         allPositive
                             |> validating (before ++ [ bad ] ++ after)
-                            |> expectAnError ( List.length before, bad, "is not positive" )
+                            |> expectAnError ( List.length before, "is not positive" )
                 , fuzz (Fuzz.list (intRange 1 1000)) "it shows no error on valid items" <|
                     \elements ->
                         allPositive
@@ -397,7 +397,7 @@ theValidatorTests =
 
                     allPositiveUnder100 =
                         Validator.list
-                            (\index model error -> ( index, model, error ))
+                            (\index error -> ( index, error ))
                             positiveUnder100
                 in
                 [ fuzz (aListOfAtLeastOne (intRange -1000 0)) "it shows errors on each invalid items" <|
@@ -406,7 +406,7 @@ theValidatorTests =
                             |> validating elements
                             |> expectErrors
                                 (List.indexedMap
-                                    (\index model -> ( index, model, "is not positive" ))
+                                    (\index _ -> ( index, "is not positive" ))
                                     elements
                                 )
                 , fuzz
@@ -423,8 +423,8 @@ theValidatorTests =
                         allPositiveUnder100
                             |> validating (before ++ [ bad1, bad2 ] ++ after)
                             |> expectErrors
-                                [ ( List.length before, bad1, "is not positive" )
-                                , ( List.length before + 1, bad2, "is over 99" )
+                                [ ( List.length before, "is not positive" )
+                                , ( List.length before + 1, "is over 99" )
                                 ]
                 , fuzz (Fuzz.list (intRange 1 99)) "it shows no error on valid items" <|
                     \elements ->

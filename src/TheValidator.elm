@@ -8,7 +8,7 @@ module TheValidator
         , invalid
         , isValid
         , list
-        , map
+        , mapError
         , maybe
         , parameterized
         , simple
@@ -39,7 +39,7 @@ holding the validation logic and allowing for composition.
 
 # Validator Composition
 
-@docs all, map, focus, focusMap, maybe, list
+@docs all, mapError, focus, focusMap, maybe, list
 
 -}
 
@@ -193,20 +193,20 @@ all validators =
 function handles the transformation from one error type to the other.
 
     onlyTrue = simple ((==) True) "This is simply not True!"
-    onlyMoreTrue = onlyTrue |> map (\model error -> (error, "It is simply", model, "!"))
+    onlyMoreTrue = onlyTrue |> mapError (\error -> (error, "It is simply False!"))
 
     validate onlyTrue False == ["This is simply not True!"]
-    validate onlyMoreTrue False == ("This is simply not True!", "It is simply", False, "!")
+    validate onlyMoreTrue False == ("This is simply not True!", "It is simply False!")
 
 -}
-map : (model -> errorA -> errorB) -> Validator model errorA -> Validator model errorB
-map transformation validator =
+mapError : (errorA -> errorB) -> Validator model errorA -> Validator model errorB
+mapError transformation validator =
     case validator of
         Simple error isValid ->
-            Simple (\item -> item |> error |> List.map (transformation item)) isValid
+            Simple (error >> List.map transformation) isValid
 
         Composite validators ->
-            Composite <| List.map (map transformation) validators
+            Composite <| List.map (mapError transformation) validators
 
         Valid ->
             Valid
@@ -242,7 +242,7 @@ focus transformation validator =
 
 
 {-| Takes a validator and transform it to work on another model and change the
-errors. Shortcut for `focus` then `map`.
+errors. Shortcut for `focus` then `mapError`.
 
     type alias User =
         { login : String, password : String }
@@ -260,11 +260,11 @@ errors. Shortcut for `focus` then `map`.
 -}
 focusMap :
     (modelB -> modelA)
-    -> (modelB -> errorA -> errorB)
+    -> (errorA -> errorB)
     -> Validator modelA errorA
     -> Validator modelB errorB
 focusMap modelTransformation errorTransformation =
-    focus modelTransformation >> map errorTransformation
+    focus modelTransformation >> mapError errorTransformation
 
 
 {-| Focuses on a value that may or may not be available for validation.
@@ -313,17 +313,17 @@ well as the error obtained by the internal validator.
     justRight = all [tooHot, tooCold]
 
     goldilocks = list
-      (\index model error -> (index, model.owner ++ "'s cup:", error))
+      (\index model error -> (index, error))
       justRight
 
     validate goldilocks cups ==
-      [ (1, "Mama Bear's cup:", "it's too hot!")
-      , (2, "Papa Bear's cup:", "it's too cold!")
+      [ (1, "it's too hot!")
+      , (2, "it's too cold!")
       ]
 
 -}
 list :
-    (Int -> model -> errorA -> errorB)
+    (Int -> errorA -> errorB)
     -> Validator model errorA
     -> Validator (List model) errorB
 list transformation validator =
@@ -331,7 +331,7 @@ list transformation validator =
         Simple error isValid ->
             let
                 indexedError index =
-                    validate (validator |> map (transformation index))
+                    validate (validator |> mapError (transformation index))
 
                 listError items =
                     items
