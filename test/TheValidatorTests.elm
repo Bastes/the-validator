@@ -445,7 +445,7 @@ applyBoth ( aToB, aToC ) a =
     ( aToB a, aToC a )
 
 
-validating : model -> Validator error model -> ( Bool, List error )
+validating : model -> Validator model error -> ( Bool, List error )
 validating model validator =
     applyBoth (applyBoth ( isValid, validate ) validator) model
 

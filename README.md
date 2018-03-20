@@ -23,7 +23,7 @@ type alias Error =
 type alias Email =
   String
 
-validEmail : Validator Error Email
+validEmail : Validator Email Error
 validEmail =
   TheValidator.simple isValidEmail "is not a valid email"
 
@@ -112,7 +112,7 @@ nonNegative =
   TheValidator.simple (\age -> age >= 0) "should not be negative"
 
 -- now we focus the nonBlank validation on the firstName field
-validFirstName = Validator Error Model
+validFirstName = Validator Model Error
 validFirstName =
   nonBlank
     |> TheValidator.focusMap
@@ -122,7 +122,7 @@ validFirstName =
       (\_ error -> "the first name " ++ error)
 
 -- same thing with the lastName with a twist: we combine two validations first
-validLastName = Validator Error Model
+validLastName = Validator Model Error
 validLastName =
   -- this method combine all validators in the list into one
   TheValidator.all
@@ -133,7 +133,7 @@ validLastName =
       .lastName
       (\model error -> "the last name " ++ error)
 
-validAge = Validator Error Model
+validAge = Validator Model Error
 validAge =
   TheValidator.all
     [ nonNegative

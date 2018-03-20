@@ -54,9 +54,9 @@ type alias Validation model =
 The internals of this data type are not exposed, instead see the constructors
 for more details.
 -}
-type Validator error model
+type Validator model error
     = Simple (model -> List error) (Validation model)
-    | Composite (List (Validator error model))
+    | Composite (List (Validator model error))
     | Valid
 
 
@@ -69,7 +69,7 @@ the reasons why the model is invalid, consider using `validate` instead.
     isValid bigNumber 1000 == False
 
 -}
-isValid : Validator error model -> model -> Bool
+isValid : Validator model error -> model -> Bool
 isValid validator model =
     case validator of
         Simple error isValid ->
@@ -94,7 +94,7 @@ the model, consider using the more efficient `isValid` instead.
     validate atLeast8Chars "long enough" == []
 
 -}
-validate : Validator error model -> model -> List error
+validate : Validator model error -> model -> List error
 validate validator model =
     case validator of
         Simple error isValid ->
@@ -117,7 +117,7 @@ validate validator model =
     validate stayPositive 0 == ["only positive numbers are allowed here stranger"]
 
 -}
-simple : Validation model -> error -> Validator error model
+simple : Validation model -> error -> Validator model error
 simple isValid error =
     Simple (always [ error ]) isValid
 
@@ -128,7 +128,7 @@ simple isValid error =
     validate justMonika "Yuri" == ["Not Yuri! Just Monika."]
 
 -}
-parameterized : Validation model -> (model -> error) -> Validator error model
+parameterized : Validation model -> (model -> error) -> Validator model error
 parameterized isValid error =
     Simple (error >> flip (::) []) isValid
 
@@ -139,7 +139,7 @@ parameterized isValid error =
     isValid (invalid "Some error message") "blah" == True
 
 -}
-invalid : error -> Validator error model
+invalid : error -> Validator model error
 invalid =
     simple (always False)
 
@@ -150,7 +150,7 @@ invalid =
     isValid valid "something" == True
 
 -}
-valid : Validator error model
+valid : Validator model error
 valid =
     Valid
 
@@ -184,7 +184,7 @@ an record, more than one check on a value, etc.).
     isValid allTHose 12 == False
 
 -}
-all : List (Validator error model) -> Validator error model
+all : List (Validator model error) -> Validator model error
 all validators =
     Composite <| flattenAll validators
 
@@ -199,7 +199,7 @@ function handles the transformation from one error type to the other.
     validate onlyMoreTrue False == ("This is simply not True!", "It is simply", False, "!")
 
 -}
-map : (model -> errorA -> errorB) -> Validator errorA model -> Validator errorB model
+map : (model -> errorA -> errorB) -> Validator model errorA -> Validator model errorB
 map transformation validator =
     case validator of
         Simple error isValid ->
@@ -226,7 +226,7 @@ record, part of a list, etc.
     validate onlyHuman { name = "Goku", strength = 999999 } == [ "It's over 9000!!!" ]
 
 -}
-focus : (modelB -> modelA) -> Validator error modelA -> Validator error modelB
+focus : (modelB -> modelA) -> Validator modelA error -> Validator modelB error
 focus transformation validator =
     case validator of
         Simple error isValid ->
@@ -258,7 +258,11 @@ errors. Shortcut for `focus` then `map`.
     validate userValidator user == ["for realz Carl Streator 'password' is not a very good password"]
 
 -}
-focusMap : (modelB -> modelA) -> (modelB -> errorA -> errorB) -> Validator errorA modelA -> Validator errorB modelB
+focusMap :
+    (modelB -> modelA)
+    -> (modelB -> errorA -> errorB)
+    -> Validator modelA errorA
+    -> Validator modelB errorB
 focusMap modelTransformation errorTransformation =
     focus modelTransformation >> map errorTransformation
 
@@ -277,7 +281,7 @@ When there is nothing, the validation succeeds by default.
     validate notBlank { name = Just "" } == ["filled or nothing"]
 
 -}
-maybe : (modelB -> Maybe modelA) -> Validator error modelA -> Validator error modelB
+maybe : (modelB -> Maybe modelA) -> Validator modelA error -> Validator modelB error
 maybe transformation validator =
     case validator of
         Simple error isValid ->
@@ -318,7 +322,10 @@ well as the error obtained by the internal validator.
       ]
 
 -}
-list : (Int -> model -> errorA -> errorB) -> Validator errorA model -> Validator errorB (List model)
+list :
+    (Int -> model -> errorA -> errorB)
+    -> Validator model errorA
+    -> Validator (List model) errorB
 list transformation validator =
     case validator of
         Simple error isValid ->
@@ -344,7 +351,7 @@ list transformation validator =
 -- HELPERS
 
 
-flatten : Validator error model -> List (Validator error model)
+flatten : Validator model error -> List (Validator model error)
 flatten validator =
     case validator of
         Composite validators ->
@@ -357,6 +364,6 @@ flatten validator =
             [ validator ]
 
 
-flattenAll : List (Validator error model) -> List (Validator error model)
+flattenAll : List (Validator model error) -> List (Validator model error)
 flattenAll =
     List.concatMap flatten
