@@ -332,9 +332,9 @@ well as the error obtained by the internal validator.
 
     model Cup = {owner: String, temperature: Int}
     cups =
-      [ {owner: "Mama Bear", temperature: 100}
-      , {owner: "Papa Bear", temperature: 20}
-      , {owner: "Little Bear", temperature: 30}
+      [ {owner = "Mama Bear", temperature = 100}
+      , {owner = "Papa Bear", temperature = 20}
+      , {owner = "Little Bear", temperature = 30}
       ]
 
     tooHot = simple (\cup -> cup.temperature > 30) "it's too hot!"
