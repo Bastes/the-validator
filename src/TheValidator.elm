@@ -4,11 +4,12 @@ module TheValidator
         , Validator
         , all
         , focus
-        , focusMap
+        , focusError
         , invalid
         , isValid
         , list
         , mapError
+        , mapErrorWithModel
         , maybe
         , parameterized
         , simple
@@ -39,7 +40,7 @@ holding the validation logic and allowing for composition.
 
 # Validator Composition
 
-@docs all, mapError, focus, focusMap, maybe, list
+@docs all, mapError, mapErrorWithModel, focus, focusError, maybe, list
 
 -}
 
@@ -192,6 +193,8 @@ all validators =
 {-| Decorates a validator by modifying the errors it returns. The transformation
 function handles the transformation from one error type to the other.
 
+(fans of functional programming will recognize profunctor's rmap)
+
     onlyTrue = simple ((==) True) "This is simply not True!"
     onlyMoreTrue = onlyTrue |> mapError (\error -> (error, "It is simply False!"))
 
@@ -212,10 +215,35 @@ mapError transformation validator =
             Valid
 
 
+{-| Same as mapError but with the model as an additional firt parameter to the
+iterator function.
+
+    onlyTrue = simple ((==) True) "This is simply not True!"
+    onlyMoreTrue = onlyTrue |> mapErrorWithModel (\model error -> (error, "It is simply " ++ toString model ++ !"))
+
+    validate onlyTrue False == ["This is simply not True!"]
+    validate onlyMoreTrue False == ("This is simply not True!", "It is simply False!")
+
+-}
+mapErrorWithModel : (model -> errorA -> errorB) -> Validator model errorA -> Validator model errorB
+mapErrorWithModel transformation validator =
+    case validator of
+        Simple error isValid ->
+            Simple (\model -> model |> error |> List.map (transformation model)) isValid
+
+        Composite validators ->
+            Composite <| List.map (mapErrorWithModel transformation) validators
+
+        Valid ->
+            Valid
+
+
 {-| Creates a new validator to check another model. The transformation function
 takes the model provided to the new validator, extracts the model expected by
 the original validator and feeds it instead. Useful to focus on a field of a
 record, part of a list, etc.
+
+(fans of functional programming will recognize profunctor's lmap)
 
     type alias Fighter = { name: String, strength : Int }
 
@@ -244,6 +272,8 @@ focus transformation validator =
 {-| Takes a validator and transform it to work on another model and change the
 errors. Shortcut for `focus` then `mapError`.
 
+(fans of functional programming will recognize profunctor's dimap)
+
     type alias User =
         { login : String, password : String }
 
@@ -251,19 +281,19 @@ errors. Shortcut for `focus` then `mapError`.
         simple ((/=) "password") "'password' is not a very good password"
 
     userValidator =
-        focusMap .password (\{login} error -> "for realz, " ++ login ++ " " ++ error) passwordValidator
+        focusError .password (\{login} error -> "for realz, " ++ login ++ " " ++ error) passwordValidator
 
     user = { name = "Carl Streator", password = "password" }
 
     validate userValidator user == ["for realz Carl Streator 'password' is not a very good password"]
 
 -}
-focusMap :
+focusError :
     (modelB -> modelA)
     -> (errorA -> errorB)
     -> Validator modelA errorA
     -> Validator modelB errorB
-focusMap modelTransformation errorTransformation =
+focusError modelTransformation errorTransformation =
     focus modelTransformation >> mapError errorTransformation
 
 

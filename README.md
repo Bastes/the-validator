@@ -115,7 +115,7 @@ nonNegative =
 validFirstName = Validator Model Error
 validFirstName =
   nonBlank
-    |> TheValidator.focusMap
+    |> TheValidator.focusError
       -- that's how this new validator knows what to validate in the whole model
       .firstName
       -- that's what this new validator adds to the errors to point to the field
@@ -129,7 +129,7 @@ validLastName =
     [ nonBlank
     , nonMontague
     ]
-    |> TheValidator.focusMap
+    |> TheValidator.focusError
       .lastName
       (\model error -> "the last name " ++ error)
 

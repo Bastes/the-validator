@@ -99,7 +99,7 @@ theValidatorTests =
                         |> validating n
                         |> expectValidity
             ]
-        , describe "mapError" <|
+        , describe "mapError, mapErrorWithModel" <|
             let
                 positive =
                     Validator.simple
@@ -110,29 +110,55 @@ theValidatorTests =
                     Validator.parameterized
                         (\n -> (n % 3) /= 0)
                         (\n -> toString n ++ " needs not be a factor of 3")
-
-                positiveAndNotFactorOf3 =
-                    Validator.all
-                        [ positive
-                        , notFactorOf3
-                        ]
-                        |> Validator.mapError (\error -> ( "the number", error ))
             in
-            [ fuzz aFactorOf3 "it maps over all errors" <|
-                \n ->
-                    positiveAndNotFactorOf3
-                        |> validating n
-                        |> expectErrors
-                            [ ( "the number", "needs to be positive" )
-                            , ( "the number", toString n ++ " needs not be a factor of 3" )
+            [ describe "mapError" <|
+                let
+                    positiveAndNotFactorOf3 =
+                        Validator.all
+                            [ positive
+                            , notFactorOf3
                             ]
-            , fuzz aNonFactorOf3 "it does not report errors when there are none" <|
-                \n ->
-                    positiveAndNotFactorOf3
-                        |> validating n
-                        |> expectValidity
+                            |> Validator.mapError (\error -> ( "the number", error ))
+                in
+                [ fuzz aFactorOf3 "it maps over all errors" <|
+                    \n ->
+                        positiveAndNotFactorOf3
+                            |> validating n
+                            |> expectErrors
+                                [ ( "the number", "needs to be positive" )
+                                , ( "the number", toString n ++ " needs not be a factor of 3" )
+                                ]
+                , fuzz aNonFactorOf3 "it does not report errors when there are none" <|
+                    \n ->
+                        positiveAndNotFactorOf3
+                            |> validating n
+                            |> expectValidity
+                ]
+            , describe "mapErrorWithModel" <|
+                let
+                    positiveAndNotFactorOf3 =
+                        Validator.all
+                            [ positive
+                            , notFactorOf3
+                            ]
+                            |> Validator.mapErrorWithModel (\model error -> ( "the number", model, error ))
+                in
+                [ fuzz aFactorOf3 "it maps over all errors" <|
+                    \n ->
+                        positiveAndNotFactorOf3
+                            |> validating n
+                            |> expectErrors
+                                [ ( "the number", n, "needs to be positive" )
+                                , ( "the number", n, toString n ++ " needs not be a factor of 3" )
+                                ]
+                , fuzz aNonFactorOf3 "it does not report errors when there are none" <|
+                    \n ->
+                        positiveAndNotFactorOf3
+                            |> validating n
+                            |> expectValidity
+                ]
             ]
-        , describe "focus, focusMap" <|
+        , describe "focus, focusError" <|
             let
                 names =
                     [ "Oyuki-Chan", "David Mills", "Mr. Tulip", "Debra Morgan", "Sandor Clegane" ]
@@ -241,11 +267,11 @@ theValidatorTests =
                                 |> expectValidity
                     ]
                 ]
-            , describe "focusMap"
+            , describe "focusError"
                 [ describe "with a simple validator" <|
                     let
                         politesse =
-                            Validator.focusMap
+                            Validator.focusError
                                 .isCallingYou
                                 (\error -> error ++ [ "will you?" ])
                                 polite
@@ -265,7 +291,7 @@ theValidatorTests =
                 , describe "with a composite validator" <|
                     let
                         smartGuy =
-                            Validator.focusMap
+                            Validator.focusError
                                 .special
                                 (\error -> [ "that guy", error ])
                                 smart
