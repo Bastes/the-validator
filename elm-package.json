@@ -1,5 +1,5 @@
 {
-    "version": "2.0.0",
+    "version": "2.1.0",
     "summary": "Validator for models that does nesting and composition",
     "repository": "https://github.com/Bastes/the-validator.git",
     "license": "GPLv3",
