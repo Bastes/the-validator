@@ -5,6 +5,7 @@ module TheValidator
         , all
         , focus
         , focusError
+        , focusInside
         , invalid
         , isValid
         , list
@@ -40,7 +41,7 @@ holding the validation logic and allowing for composition.
 
 # Validator Composition
 
-@docs all, mapError, mapErrorWithModel, focus, focusError, maybe, list
+@docs all, mapError, mapErrorWithModel, focus, focusError, focusInside, maybe, list
 
 -}
 
@@ -58,6 +59,7 @@ for more details.
 type Validator model error
     = Simple (Validation model) (model -> List error)
     | Composite (List (Validator model error))
+    | Generated (model -> Validator model error)
     | Valid
 
 
@@ -80,6 +82,10 @@ isValid validator model =
             validators
                 |> List.map isValid
                 |> List.all ((|>) model)
+
+        Generated generator ->
+            model
+                |> isValid (generator model)
 
         Valid ->
             True
@@ -107,6 +113,10 @@ validate validator model =
         Composite validators ->
             validators
                 |> List.concatMap (flip validate model)
+
+        Generated generator ->
+            model
+                |> validate (generator model)
 
         Valid ->
             []
@@ -211,6 +221,9 @@ mapError transformation validator =
         Composite validators ->
             Composite <| List.map (mapError transformation) validators
 
+        Generated generator ->
+            Generated (generator >> mapError transformation)
+
         Valid ->
             Valid
 
@@ -233,6 +246,9 @@ mapErrorWithModel transformation validator =
 
         Composite validators ->
             Composite <| List.map (mapErrorWithModel transformation) validators
+
+        Generated generator ->
+            Generated (generator >> mapErrorWithModel transformation)
 
         Valid ->
             Valid
@@ -264,6 +280,9 @@ focus transformation validator =
 
         Composite validators ->
             Composite <| List.map (focus transformation) validators
+
+        Generated generator ->
+            Generated (transformation >> generator >> focus transformation)
 
         Valid ->
             Valid
@@ -297,6 +316,26 @@ focusError modelTransformation errorTransformation =
     focus modelTransformation >> mapError errorTransformation
 
 
+{-| Focuses inside a model to make validations that depend on more than one
+field (typically, validations that require to check the value of another
+field to be validated).
+
+    under value = simple (\n -> n < value) "is not under (" ++ toString value ++ ")"
+    minUnderMax = focusInside (\{ max } -> focusError .min ((++) "min ") (under max))
+
+    isValid minUnderMax { min = 1, max = 5 } == True
+    validate minUnderMax { min = 1, max = 5 } == []
+    isValid minUnderMax { min = 5, max = 5 } == False
+    validate minUnderMax { min = 5, max = 5 } == ["min is not under (5)"]
+
+-}
+focusInside :
+    (model -> Validator model error)
+    -> Validator model error
+focusInside generator =
+    Generated generator
+
+
 {-| Focuses on a value that may or may not be available for validation.
 When there is nothing, the validation succeeds by default.
 
@@ -321,6 +360,12 @@ maybe transformation validator =
 
         Composite validators ->
             Composite <| List.map (maybe transformation) validators
+
+        Generated generator ->
+            Generated <|
+                transformation
+                    >> Maybe.map (generator >> maybe transformation)
+                    >> Maybe.withDefault Valid
 
         Valid ->
             Valid
@@ -372,6 +417,20 @@ list transformation validator =
 
         Composite validators ->
             Composite (validators |> List.map (list transformation))
+
+        Generated generator ->
+            Generated
+                (\models ->
+                    let
+                        validators =
+                            models
+                                |> List.indexedMap
+                                    (\index -> generator >> mapError (transformation index))
+                    in
+                    Simple
+                        (List.map2 isValid validators >> List.all ((==) True))
+                        (List.map2 validate validators >> List.concat)
+                )
 
         Valid ->
             Valid

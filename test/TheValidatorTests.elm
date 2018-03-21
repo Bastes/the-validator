@@ -110,51 +110,86 @@ theValidatorTests =
                     Validator.parameterized
                         (\n -> (n % 3) /= 0)
                         (\n -> toString n ++ " needs not be a factor of 3")
+
+                not5Aces =
+                    Validator.focusInside
+                        (\{ rank, count } ->
+                            if rank == "Ace" then
+                                Validator.focus
+                                    .count
+                                    (Validator.simple (flip (<) 5) "5 or more is suspect for aces")
+                            else
+                                valid
+                        )
             in
             [ describe "mapError" <|
                 let
                     positiveAndNotFactorOf3 =
                         Validator.all
-                            [ positive
-                            , notFactorOf3
+                            [ focus .count positive
+                            , focus .count notFactorOf3
+                            , not5Aces
                             ]
                             |> Validator.mapError (\error -> ( "the number", error ))
                 in
                 [ fuzz aFactorOf3 "it maps over all errors" <|
                     \n ->
                         positiveAndNotFactorOf3
-                            |> validating n
+                            |> validating { rank = "Jack", count = n }
                             |> expectErrors
                                 [ ( "the number", "needs to be positive" )
                                 , ( "the number", toString n ++ " needs not be a factor of 3" )
                                 ]
+                , test "it also maps over generated validators" <|
+                    \_ ->
+                        positiveAndNotFactorOf3
+                            |> validating { rank = "Ace", count = 5 }
+                            |> expectErrors
+                                [ ( "the number", "5 or more is suspect for aces" )
+                                ]
                 , fuzz aNonFactorOf3 "it does not report errors when there are none" <|
                     \n ->
                         positiveAndNotFactorOf3
-                            |> validating n
+                            |> validating { rank = "Jack", count = n }
                             |> expectValidity
                 ]
             , describe "mapErrorWithModel" <|
                 let
                     positiveAndNotFactorOf3 =
                         Validator.all
-                            [ positive
-                            , notFactorOf3
+                            [ focus .count positive
+                            , focus .count notFactorOf3
+                            , not5Aces
                             ]
-                            |> Validator.mapErrorWithModel (\model error -> ( "the number", model, error ))
+                            |> Validator.mapErrorWithModel (\model error -> ( "model:", model, "error:", error ))
                 in
                 [ fuzz aFactorOf3 "it maps over all errors" <|
                     \n ->
+                        let
+                            model =
+                                { rank = "Queen", count = n }
+                        in
                         positiveAndNotFactorOf3
-                            |> validating n
+                            |> validating model
                             |> expectErrors
-                                [ ( "the number", n, "needs to be positive" )
-                                , ( "the number", n, toString n ++ " needs not be a factor of 3" )
+                                [ ( "model:", model, "error:", "needs to be positive" )
+                                , ( "model:", model, "error:", toString n ++ " needs not be a factor of 3" )
+                                ]
+                , test "it also maps over generated validators" <|
+                    \_ ->
+                        let
+                            model =
+                                { rank = "Ace", count = 5 }
+                        in
+                        positiveAndNotFactorOf3
+                            |> validating model
+                            |> expectErrors
+                                [ ( "model:", model, "error:", "5 or more is suspect for aces" )
                                 ]
                 , fuzz aNonFactorOf3 "it does not report errors when there are none" <|
                     \n ->
                         positiveAndNotFactorOf3
-                            |> validating n
+                            |> validating { rank = "Queen", count = n }
                             |> expectValidity
                 ]
             ]
@@ -202,6 +237,15 @@ theValidatorTests =
                         [ simple (.luck >> flip (>) 5) "is quite unlucky"
                         , simple (.intelligence >> flip (>) 5) "is pretty dumb"
                         ]
+
+                gifted =
+                    Validator.focusInside
+                        (\{ luck, intelligence } ->
+                            if (luck + intelligence) > 10 then
+                                Validator.valid
+                            else
+                                Validator.invalid "is not gifted"
+                        )
 
                 personFromTuple ( name, luck, intelligence ) =
                     { name = name
@@ -266,6 +310,24 @@ theValidatorTests =
                                 |> validating guy
                                 |> expectValidity
                     ]
+                , describe "with a generated validator" <|
+                    let
+                        giftedGuy =
+                            focus .special gifted
+                    in
+                    [ test "it shows errors on the detail when there are any" <|
+                        \_ ->
+                            giftedGuy
+                                |> validating { name = "Rantamplan", special = { luck = 8, intelligence = 1 } }
+                                |> expectErrors
+                                    [ "is not gifted"
+                                    ]
+                    , test "it shows no error when there is none" <|
+                        \_ ->
+                            giftedGuy
+                                |> validating { name = "Lucky Luke", special = { luck = 10, intelligence = 7 } }
+                                |> expectValidity
+                    ]
                 ]
             , describe "focusError"
                 [ describe "with a simple validator" <|
@@ -316,7 +378,53 @@ theValidatorTests =
                                 |> validating guy
                                 |> expectValidity
                     ]
+                , describe "with a generated validator" <|
+                    let
+                        giftedGuy =
+                            Validator.focusError
+                                .special
+                                (\error -> [ "that guy", error ])
+                                gifted
+                    in
+                    [ test "it shows errors on the detail when there are any" <|
+                        \_ ->
+                            giftedGuy
+                                |> validating { name = "Rantamplan", special = { luck = 8, intelligence = 1 } }
+                                |> expectErrors
+                                    [ [ "that guy", "is not gifted" ]
+                                    ]
+                    , test "it shows no error when there is none" <|
+                        \_ ->
+                            giftedGuy
+                                |> validating { name = "Lucky Luke", special = { luck = 10, intelligence = 7 } }
+                                |> expectValidity
+                    ]
                 ]
+            ]
+        , describe "focusInside" <|
+            let
+                boundaries =
+                    Validator.focusInside
+                        (\{ min, max } ->
+                            all
+                                [ focus .min (Validator.simple (flip (<) max) "the min should be less than the max")
+                                , focus .max (Validator.simple (flip (>) min) "the max should be more than the min")
+                                ]
+                        )
+            in
+            [ test "the validator produced rejects what is invalid" <|
+                \_ ->
+                    boundaries
+                        |> validating { min = 1, max = 1 }
+                        |> expectErrors
+                            [ "the min should be less than the max"
+                            , "the max should be more than the min"
+                            ]
+            , test "the validator produced validates what is valid" <|
+                \_ ->
+                    boundaries
+                        |> validating { min = 1, max = 2 }
+                        |> expectValidity
             ]
         , describe "maybe" <|
             [ describe "with a simple validator" <|
@@ -365,6 +473,36 @@ theValidatorTests =
                     \theCount ->
                         maybeCompositeValidator
                             |> validating { name = "Galahad", counts = Just theCount }
+                            |> expectValidity
+                ]
+            , describe "with a generated validator" <|
+                let
+                    maybeGeneratedValidator =
+                        focusInside
+                            (\n ->
+                                if n % 3 == 0 then
+                                    simple (flip (>) 123) "factors of 3 should be more than 123"
+                                else if n % 2 == 0 then
+                                    simple (flip (<) 123) "non-factors of 3 factors of 2 should be less than 123"
+                                else
+                                    valid
+                            )
+                            |> Validator.maybe .counts
+                in
+                [ test "always pass when there is nothing" <|
+                    \_ ->
+                        maybeGeneratedValidator
+                            |> validating { name = "Lancelot", counts = Nothing }
+                            |> expectValidity
+                , test "fails when there is something that fails" <|
+                    \_ ->
+                        maybeGeneratedValidator
+                            |> validating { name = "Sir Robin's minstrel", counts = Just 124 }
+                            |> expectAnError "non-factors of 3 factors of 2 should be less than 123"
+                , test "succeeds when there is something that succeeds" <|
+                    \_ ->
+                        maybeGeneratedValidator
+                            |> validating { name = "Sir Robin", counts = Just 234 }
                             |> expectValidity
                 ]
             ]
@@ -455,6 +593,52 @@ theValidatorTests =
                 , fuzz (Fuzz.list (intRange 1 99)) "it shows no error on valid items" <|
                     \elements ->
                         allPositiveUnder100
+                            |> validating elements
+                            |> expectValidity
+                ]
+            , describe "with a generated validator" <|
+                let
+                    positiveOver100 =
+                        Validator.focusInside
+                            (\n ->
+                                if n > 0 then
+                                    simple (flip (>) 100) "should be more than 100 when positive"
+                                else
+                                    valid
+                            )
+
+                    allPositiveOver100 =
+                        Validator.list
+                            (\index error -> ( index, error ))
+                            positiveOver100
+                in
+                [ fuzz (aListOfAtLeastOne (intRange 1 100)) "it shows errors on each invalid items" <|
+                    \elements ->
+                        allPositiveOver100
+                            |> validating elements
+                            |> expectErrors
+                                (List.indexedMap
+                                    (\index _ -> ( index, "should be more than 100 when positive" ))
+                                    elements
+                                )
+                , fuzz
+                    (Fuzz.tuple3
+                        ( Fuzz.list (intRange 101 1000)
+                        , intRange 1 100
+                        , Fuzz.list (intRange -1000 0)
+                        )
+                    )
+                    "it shows errors only on invalid items"
+                  <|
+                    \( before, bad, after ) ->
+                        allPositiveOver100
+                            |> validating (before ++ [ bad ] ++ after)
+                            |> expectErrors
+                                [ ( List.length before, "should be more than 100 when positive" )
+                                ]
+                , fuzz (Fuzz.list (intRange 101 1000)) "it shows no error on valid items" <|
+                    \elements ->
+                        allPositiveOver100
                             |> validating elements
                             |> expectValidity
                 ]
