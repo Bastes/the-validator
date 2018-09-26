@@ -1,0 +1,17 @@
+{
+    "type": "package",
+    "name": "Bastes/the-validator",
+    "summary": "Validator for models that does nesting and composition",
+    "license": "AGPL-3.0",
+    "version": "2.1.1",
+    "exposed-modules": [
+        "TheValidator"
+    ],
+    "elm-version": "0.19.0 <= v < 0.20.0",
+    "dependencies": {
+        "elm/core": "1.0.0 <= v < 2.0.0"
+    },
+    "test-dependencies": {
+      "elm-explorations/test": "1.1.0 <= v < 1.2.0"
+    }
+}

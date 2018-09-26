@@ -1,22 +1,10 @@
-module TheValidator
-    exposing
-        ( Validation
-        , Validator
-        , all
-        , focus
-        , focusError
-        , focusInside
-        , invalid
-        , isValid
-        , list
-        , mapError
-        , mapErrorWithModel
-        , maybe
-        , parameterized
-        , simple
-        , valid
-        , validate
-        )
+module TheValidator exposing
+    ( Validator
+    , Validation
+    , validate, isValid
+    , simple, parameterized, invalid, valid
+    , all, mapError, mapErrorWithModel, focus, focusError, focusInside, maybe, list
+    )
 
 {-| This library provides a way to express validations through Validator objects
 holding the validation logic and allowing for composition.
@@ -75,8 +63,8 @@ the reasons why the model is invalid, consider using `validate` instead.
 isValid : Validator model error -> model -> Bool
 isValid validator model =
     case validator of
-        Simple isValid error ->
-            isValid model
+        Simple validity error ->
+            validity model
 
         Composite validators ->
             validators
@@ -104,15 +92,16 @@ the model, consider using the more efficient `isValid` instead.
 validate : Validator model error -> model -> List error
 validate validator model =
     case validator of
-        Simple isValid error ->
-            if model |> isValid then
+        Simple validity error ->
+            if model |> validity then
                 []
+
             else
                 error model
 
         Composite validators ->
             validators
-                |> List.concatMap (flip validate model)
+                |> List.concatMap (\a -> validate a model)
 
         Generated generator ->
             model
@@ -129,8 +118,8 @@ validate validator model =
 
 -}
 simple : Validation model -> error -> Validator model error
-simple isValid error =
-    Simple isValid (always [ error ])
+simple validity error =
+    Simple validity (always [ error ])
 
 
 {-| A parameterized validator that composes a single error from the model.
@@ -140,13 +129,14 @@ simple isValid error =
 
 -}
 parameterized : Validation model -> (model -> error) -> Validator model error
-parameterized isValid error =
-    Simple isValid (error >> flip (::) [])
+parameterized validity error =
+    Simple validity (error >> (\a -> (::) a []))
 
 
 {-| A validator that is always invalid. It will always provide the same error.
 
-    validate (invalid "Bad, bad number!") 111 == ["Bad, bad number!"]
+    validate (invalid "Bad, bad number!") 111 == [ "Bad, bad number!" ]
+
     isValid (invalid "Some error message") "blah" == True
 
 -}
@@ -158,6 +148,7 @@ invalid =
 {-| A validator that is always valid. It will always pass, never provide error.
 
     validate valid 123 == []
+
     isValid valid "something" == True
 
 -}
@@ -215,8 +206,8 @@ function handles the transformation from one error type to the other.
 mapError : (errorA -> errorB) -> Validator model errorA -> Validator model errorB
 mapError transformation validator =
     case validator of
-        Simple isValid error ->
-            Simple isValid (error >> List.map transformation)
+        Simple validity error ->
+            Simple validity (error >> List.map transformation)
 
         Composite validators ->
             Composite <| List.map (mapError transformation) validators
@@ -241,8 +232,8 @@ iterator function.
 mapErrorWithModel : (model -> errorA -> errorB) -> Validator model errorA -> Validator model errorB
 mapErrorWithModel transformation validator =
     case validator of
-        Simple isValid error ->
-            Simple isValid (\model -> model |> error |> List.map (transformation model))
+        Simple validity error ->
+            Simple validity (\model -> model |> error |> List.map (transformation model))
 
         Composite validators ->
             Composite <| List.map (mapErrorWithModel transformation) validators
@@ -273,9 +264,9 @@ record, part of a list, etc.
 focus : (modelB -> modelA) -> Validator modelA error -> Validator modelB error
 focus transformation validator =
     case validator of
-        Simple isValid error ->
+        Simple validity error ->
             Simple
-                (transformation >> isValid)
+                (transformation >> validity)
                 (transformation >> error)
 
         Composite validators ->
@@ -353,9 +344,9 @@ When there is nothing, the validation succeeds by default.
 maybe : (modelB -> Maybe modelA) -> Validator modelA error -> Validator modelB error
 maybe transformation validator =
     case validator of
-        Simple isValid error ->
+        Simple validity error ->
             Simple
-                (transformation >> Maybe.map isValid >> Maybe.withDefault True)
+                (transformation >> Maybe.map validity >> Maybe.withDefault True)
                 (transformation >> Maybe.map error >> Maybe.withDefault [])
 
         Composite validators ->
@@ -403,7 +394,7 @@ list :
     -> Validator (List model) errorB
 list transformation validator =
     case validator of
-        Simple isValid error ->
+        Simple validity error ->
             let
                 indexedError index =
                     validate (validator |> mapError (transformation index))
@@ -413,7 +404,7 @@ list transformation validator =
                         |> List.indexedMap indexedError
                         |> List.concat
             in
-            Simple (List.all isValid) listError
+            Simple (List.all validity) listError
 
         Composite validators ->
             Composite (validators |> List.map (list transformation))

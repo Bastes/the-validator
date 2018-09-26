@@ -31,14 +31,14 @@ theValidatorTests =
             let
                 aValidator =
                     Validator.parameterized
-                        (flip (<) 3)
-                        (\n -> toString n ++ " should be lower than 3!")
+                        (\n -> n < 3)
+                        (\n -> String.fromInt n ++ " should be lower than 3!")
             in
             [ fuzz (intRange 3 1000) "reports the error, using the model's value" <|
                 \n ->
                     aValidator
                         |> validating n
-                        |> expectAnError (toString n ++ " should be lower than 3!")
+                        |> expectAnError (String.fromInt n ++ " should be lower than 3!")
             , fuzz (intRange -1000 2) "validates a valid model" <|
                 \n ->
                     aValidator
@@ -63,17 +63,17 @@ theValidatorTests =
             let
                 notFizz =
                     Validator.simple
-                        (\n -> n % 3 /= 0)
+                        (\n -> (n |> modBy 3) /= 0)
                         "not fizz!"
 
                 notBuzz =
                     Validator.simple
-                        (\n -> n % 5 /= 0)
+                        (\n -> (n |> modBy 5) /= 0)
                         "not buzz!"
 
                 notFizzBuzz =
                     Validator.simple
-                        (\n -> n % 15 /= 0)
+                        (\n -> (n |> modBy 15) /= 0)
                         "not fizzbuzz!"
 
                 noneOfTheseFizzAndBuzzes =
@@ -103,13 +103,13 @@ theValidatorTests =
             let
                 positive =
                     Validator.simple
-                        (flip (>) 0)
+                        (\n -> n > 0)
                         "needs to be positive"
 
                 notFactorOf3 =
                     Validator.parameterized
-                        (\n -> (n % 3) /= 0)
-                        (\n -> toString n ++ " needs not be a factor of 3")
+                        (\n -> (n |> modBy 3) /= 0)
+                        (\n -> String.fromInt n ++ " needs not be a factor of 3")
 
                 not5Aces =
                     Validator.focusInside
@@ -117,7 +117,8 @@ theValidatorTests =
                             if rank == "Ace" then
                                 Validator.focus
                                     .count
-                                    (Validator.simple (flip (<) 5) "5 or more is suspect for aces")
+                                    (Validator.simple (\n -> n < 5) "5 or more is suspect for aces")
+
                             else
                                 valid
                         )
@@ -138,7 +139,7 @@ theValidatorTests =
                             |> validating { rank = "Jack", count = n }
                             |> expectErrors
                                 [ ( "the number", "needs to be positive" )
-                                , ( "the number", toString n ++ " needs not be a factor of 3" )
+                                , ( "the number", String.fromInt n ++ " needs not be a factor of 3" )
                                 ]
                 , test "it also maps over generated validators" <|
                     \_ ->
@@ -147,7 +148,7 @@ theValidatorTests =
                             |> expectErrors
                                 [ ( "the number", "5 or more is suspect for aces" )
                                 ]
-                , fuzz aNonFactorOf3 "it does not report errors when there are none" <|
+                , fuzz aPositiveNonFactorOf3 "it does not report errors when there are none" <|
                     \n ->
                         positiveAndNotFactorOf3
                             |> validating { rank = "Jack", count = n }
@@ -161,7 +162,7 @@ theValidatorTests =
                             , focus .count notFactorOf3
                             , not5Aces
                             ]
-                            |> Validator.mapErrorWithModel (\model error -> ( "model:", model, "error:", error ))
+                            |> Validator.mapErrorWithModel (\model error -> ( ( "model:", model ), ( "error:", error ) ))
                 in
                 [ fuzz aFactorOf3 "it maps over all errors" <|
                     \n ->
@@ -172,8 +173,8 @@ theValidatorTests =
                         positiveAndNotFactorOf3
                             |> validating model
                             |> expectErrors
-                                [ ( "model:", model, "error:", "needs to be positive" )
-                                , ( "model:", model, "error:", toString n ++ " needs not be a factor of 3" )
+                                [ ( ( "model:", model ), ( "error:", "needs to be positive" ) )
+                                , ( ( "model:", model ), ( "error:", String.fromInt n ++ " needs not be a factor of 3" ) )
                                 ]
                 , test "it also maps over generated validators" <|
                     \_ ->
@@ -184,9 +185,9 @@ theValidatorTests =
                         positiveAndNotFactorOf3
                             |> validating model
                             |> expectErrors
-                                [ ( "model:", model, "error:", "5 or more is suspect for aces" )
+                                [ ( ( "model:", model ), ( "error:", "5 or more is suspect for aces" ) )
                                 ]
-                , fuzz aNonFactorOf3 "it does not report errors when there are none" <|
+                , fuzz aPositiveNonFactorOf3 "it does not report errors when there are none" <|
                     \n ->
                         positiveAndNotFactorOf3
                             |> validating { rank = "Queen", count = n }
@@ -202,12 +203,10 @@ theValidatorTests =
                     [ "bugger", "jay", "dunderhead", "fribble", "gadabout" ]
 
                 aNonNaughtyNick =
-                    conditional
-                        { retries = 10
-                        , fallback = always "gentleman"
-                        , condition = \n -> List.member n naughtyNicks
-                        }
-                        string
+                    Fuzz.oneOf
+                        ([ "dude", "friend", "sir", "pal", "mister" ]
+                            |> List.map Fuzz.constant
+                        )
 
                 aNaughtyCall =
                     Fuzz.tuple ( oneOfThese names, oneOfThese naughtyNicks )
@@ -229,13 +228,13 @@ theValidatorTests =
 
                 polite =
                     Validator.parameterized
-                        (not << flip List.member naughtyNicks)
+                        (not << (\nick -> List.member nick naughtyNicks))
                         (\isCallingYou -> [ "please refrain from calling me a", isCallingYou ])
 
                 smart =
                     Validator.all
-                        [ simple (.luck >> flip (>) 5) "is quite unlucky"
-                        , simple (.intelligence >> flip (>) 5) "is pretty dumb"
+                        [ simple (.luck >> (\n -> n > 5)) "is quite unlucky"
+                        , simple (.intelligence >> (\n -> n > 5)) "is pretty dumb"
                         ]
 
                 gifted =
@@ -243,6 +242,7 @@ theValidatorTests =
                         (\{ luck, intelligence } ->
                             if (luck + intelligence) > 10 then
                                 Validator.valid
+
                             else
                                 Validator.invalid "is not gifted"
                         )
@@ -407,8 +407,8 @@ theValidatorTests =
                     Validator.focusInside
                         (\{ min, max } ->
                             all
-                                [ focus .min (Validator.simple (flip (<) max) "the min should be less than the max")
-                                , focus .max (Validator.simple (flip (>) min) "the max should be more than the min")
+                                [ focus .min (Validator.simple (\n -> n < max) "the min should be less than the max")
+                                , focus .max (Validator.simple (\n -> n > min) "the max should be more than the min")
                                 ]
                         )
             in
@@ -479,11 +479,13 @@ theValidatorTests =
                 let
                     maybeGeneratedValidator =
                         focusInside
-                            (\n ->
-                                if n % 3 == 0 then
-                                    simple (flip (>) 123) "factors of 3 should be more than 123"
-                                else if n % 2 == 0 then
-                                    simple (flip (<) 123) "non-factors of 3 factors of 2 should be less than 123"
+                            (\n1 ->
+                                if (n1 |> modBy 3) == 0 then
+                                    simple (\n2 -> n2 > 123) "factors of 3 should be more than 123"
+
+                                else if (n1 |> modBy 2) == 0 then
+                                    simple (\n2 -> n2 < 123) "non-factors of 3 factors of 2 should be less than 123"
+
                                 else
                                     valid
                             )
@@ -510,7 +512,7 @@ theValidatorTests =
             [ describe "with a simple validator" <|
                 let
                     positive =
-                        Validator.simple (flip (>) 0) "is not positive"
+                        Validator.simple (\n -> n > 0) "is not positive"
 
                     allPositive =
                         Validator.list
@@ -548,10 +550,10 @@ theValidatorTests =
             , describe "with a composite validator" <|
                 let
                     positive =
-                        Validator.simple (flip (>) 0) "is not positive"
+                        Validator.simple (\n -> n > 0) "is not positive"
 
                     under100 =
-                        Validator.simple (flip (<) 100) "is over 99"
+                        Validator.simple (\n -> n < 100) "is over 99"
 
                     positiveUnder100 =
                         Validator.all
@@ -574,16 +576,20 @@ theValidatorTests =
                                     elements
                                 )
                 , fuzz
-                    (Fuzz.tuple4
-                        ( Fuzz.list (intRange 1 99)
-                        , intRange -1000 0
-                        , intRange 100 1000
-                        , Fuzz.list (intRange 1 99)
+                    (Fuzz.tuple
+                        ( Fuzz.tuple
+                            ( Fuzz.list (intRange 1 99)
+                            , Fuzz.list (intRange 1 99)
+                            )
+                        , Fuzz.tuple
+                            ( intRange -1000 0
+                            , intRange 100 1000
+                            )
                         )
                     )
                     "it shows errors only on invalid items"
                   <|
-                    \( before, bad1, bad2, after ) ->
+                    \( ( before, after ), ( bad1, bad2 ) ) ->
                         allPositiveUnder100
                             |> validating (before ++ [ bad1, bad2 ] ++ after)
                             |> expectErrors
@@ -600,9 +606,10 @@ theValidatorTests =
                 let
                     positiveOver100 =
                         Validator.focusInside
-                            (\n ->
-                                if n > 0 then
-                                    simple (flip (>) 100) "should be more than 100 when positive"
+                            (\n1 ->
+                                if n1 > 0 then
+                                    simple (\n2 -> n2 > 100) "should be more than 100 when positive"
+
                                 else
                                     valid
                             )
@@ -686,28 +693,31 @@ aFizzBuzzInt =
 
 
 aListOfAtLeastOne : Fuzzer a -> Fuzzer (List a)
-aListOfAtLeastOne =
-    conditional
-        { retries = 10
-        , fallback = always []
-        , condition = not << List.isEmpty
-        }
-        << Fuzz.list
+aListOfAtLeastOne fuzzer =
+    Fuzz.tuple ( fuzzer, Fuzz.list fuzzer )
+        |> Fuzz.map (\( item, list ) -> item :: list)
 
 
 aNonFizzBuzzInt : Fuzzer Int
 aNonFizzBuzzInt =
-    conditional
-        { retries = 10
-        , fallback = always 7
-        , condition = \n -> (n % 3 /= 0) && (n % 5 /= 0)
-        }
-        (intRange 1 1000)
+    let
+        isFizzOrBuzz n =
+            ((n |> modBy 3) == 0) || ((n |> modBy 5) == 0)
+
+        makeNonFizzBuzz n =
+            if isFizzOrBuzz n then
+                makeNonFizzBuzz (n + 1)
+
+            else
+                n
+    in
+    Fuzz.int
+        |> Fuzz.map makeNonFizzBuzz
 
 
 aBuzzOnlyInt : Fuzzer Int
 aBuzzOnlyInt =
-    aNonFactorOf3 |> Fuzz.map ((*) 5)
+    aPositiveNonFactorOf3 |> Fuzz.map ((*) 5)
 
 
 aFactorOf3 : Fuzzer Int
@@ -715,21 +725,29 @@ aFactorOf3 =
     intRange -1000 0 |> Fuzz.map ((*) 3)
 
 
-aNonFactorOf3 : Fuzzer Int
-aNonFactorOf3 =
-    conditional
-        { retries = 10
-        , fallback = always 7
-        , condition = \n -> (n % 3) /= 0
-        }
-        (intRange 1 1000)
+aPositiveNonFactorOf3 : Fuzzer Int
+aPositiveNonFactorOf3 =
+    let
+        makeNonFactorOf3 n =
+            if (n |> modBy 3) == 0 then
+                n + 1
+
+            else
+                n
+    in
+    Fuzz.intRange 1 1000
+        |> Fuzz.map makeNonFactorOf3
 
 
 aNonEmptyString : Fuzzer String
 aNonEmptyString =
-    conditional
-        { retries = 10
-        , fallback = always "time"
-        , condition = (/=) ""
-        }
-        string
+    let
+        makeNonEmpty ( c, s ) =
+            if s |> String.isEmpty then
+                c |> String.fromChar
+
+            else
+                s
+    in
+    Fuzz.tuple ( Fuzz.char, Fuzz.string )
+        |> Fuzz.map makeNonEmpty
